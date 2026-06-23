@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Tldraw, useEditor, useReactor } from 'tldraw'
+import { Tldraw, useEditor } from 'tldraw'
+import { DiagramApiBridge } from '@/components/DiagramApiBridge'
 import { ChatPanel } from '@/components/ChatPanel'
-import { getCurrentDiagramContext } from '@/lib/diagramContext'
 import type { DiagramContext } from '@/lib/types'
 
 const emptyDiagram: DiagramContext = {
@@ -49,13 +49,5 @@ type DiagramContextTrackerProps = {
 function DiagramContextTracker({ onDiagramChange }: DiagramContextTrackerProps) {
   const editor = useEditor()
 
-  useReactor(
-    'track diagram context',
-    () => {
-      onDiagramChange(getCurrentDiagramContext(editor))
-    },
-    [editor, onDiagramChange],
-  )
-
-  return null
+  return <DiagramApiBridge editor={editor} onDiagramChange={onDiagramChange} />
 }

@@ -370,6 +370,31 @@ Then add:
 - applying bound arrows
 - `POST /api/diagram/ask`
 
+## Current Implementation Status
+
+The current POC implements the command bridge with in-memory server state.
+
+Implemented:
+
+- `GET /api/diagram/context`
+- `POST /api/diagram/context`
+- `POST /api/diagram/commands`
+- `GET /api/diagram/commands?status=pending`
+- `POST /api/diagram/commands/[id]/result`
+- `POST /api/diagram/ask`
+- browser-side context publishing
+- browser-side command polling
+- `createShape`
+- `createConnection`
+
+Limitations:
+
+- state resets when the Next.js server restarts
+- commands are auto-applied by the browser
+- there is no authentication or authorization
+- commands only apply while a browser session is open
+- this is not a replacement for tldraw sync or durable persistence
+
 ## Non Goals for First API Milestone
 
 - authentication
