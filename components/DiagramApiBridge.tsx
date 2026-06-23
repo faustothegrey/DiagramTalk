@@ -89,6 +89,14 @@ export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgePr
   }, [editor])
 
   useReactor('publish diagram api context', handleDiagramChange, [handleDiagramChange])
+  useReactor(
+    'autosave diagram snapshot',
+    () => {
+      editor.getCurrentPageShapes()
+      saveSnapshot()
+    },
+    [editor, saveSnapshot],
+  )
 
   useEffect(() => {
     return () => {
@@ -100,10 +108,6 @@ export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgePr
       }
     }
   }, [])
-
-  useEffect(() => {
-    return editor.store.listen(saveSnapshot, { scope: 'document' })
-  }, [editor, saveSnapshot])
 
   useEffect(() => {
     let isDisposed = false
