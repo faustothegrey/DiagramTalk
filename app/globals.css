@@ -44,6 +44,15 @@ textarea {
   overflow: hidden;
 }
 
+.workspaceLoading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: var(--muted);
+  background: var(--background);
+  font-size: 14px;
+}
+
 .canvasRegion {
   min-width: 0;
   min-height: 0;

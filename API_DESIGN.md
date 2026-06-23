@@ -382,18 +382,28 @@ Implemented:
 - `GET /api/diagram/commands?status=pending`
 - `POST /api/diagram/commands/[id]/result`
 - `POST /api/diagram/ask`
+- `GET /api/diagram/snapshot`
+- `POST /api/diagram/snapshot`
 - browser-side context publishing
+- browser-side snapshot autosave
 - browser-side command polling
 - `createShape`
 - `createConnection`
 
 Limitations:
 
-- state resets when the Next.js server restarts
+- command queue state resets when the Next.js server restarts
 - commands are auto-applied by the browser
 - there is no authentication or authorization
 - commands only apply while a browser session is open
 - this is not a replacement for tldraw sync or durable persistence
+
+Snapshot persistence:
+
+- tldraw snapshots are saved to `.diagramtalk/diagram-snapshot.json`
+- `.diagramtalk/` is ignored by git so user diagrams are not committed
+- the browser loads the saved snapshot before mounting tldraw
+- the browser autosaves snapshots after document changes
 
 ## Non Goals for First API Milestone
 

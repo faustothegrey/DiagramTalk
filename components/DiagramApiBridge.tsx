@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import {
   createBindingId,
   createShapeId,
+  getSnapshot,
   toRichText,
   useReactor,
   type Editor,
@@ -32,9 +33,11 @@ type DiagramApiBridgeProps = {
 
 const POLL_INTERVAL_MS = 1500
 const PUBLISH_DEBOUNCE_MS = 300
+const SNAPSHOT_SAVE_DEBOUNCE_MS = 800
 
 export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgeProps) {
   const publishTimerRef = useRef<number | null>(null)
+  const snapshotTimerRef = useRef<number | null>(null)
   const processingCommandIdsRef = useRef(new Set<string>())
 
   const publishContext = useCallback((context: DiagramContext) => {
@@ -64,6 +67,27 @@ export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgePr
     publishContext(context)
   }, [editor, onDiagramChange, publishContext])
 
+  const saveSnapshot = useCallback(() => {
+    if (snapshotTimerRef.current) {
+      window.clearTimeout(snapshotTimerRef.current)
+    }
+
+    snapshotTimerRef.current = window.setTimeout(() => {
+      snapshotTimerRef.current = null
+      const snapshot = getSnapshot(editor.store)
+
+      void fetch('/api/diagram/snapshot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ snapshot }),
+      }).catch((error) => {
+        console.error('[DiagramApiBridge] Failed to save diagram snapshot.', error)
+      })
+    }, SNAPSHOT_SAVE_DEBOUNCE_MS)
+  }, [editor])
+
   useReactor('publish diagram api context', handleDiagramChange, [handleDiagramChange])
 
   useEffect(() => {
@@ -71,8 +95,15 @@ export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgePr
       if (publishTimerRef.current) {
         window.clearTimeout(publishTimerRef.current)
       }
+      if (snapshotTimerRef.current) {
+        window.clearTimeout(snapshotTimerRef.current)
+      }
     }
   }, [])
+
+  useEffect(() => {
+    return editor.store.listen(saveSnapshot, { scope: 'document' })
+  }, [editor, saveSnapshot])
 
   useEffect(() => {
     let isDisposed = false

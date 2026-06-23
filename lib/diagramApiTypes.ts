@@ -1,5 +1,7 @@
 import type { DiagramContext } from './types'
 
+export type DiagramSnapshot = unknown
+
 export type CreateShapeInput = {
   id?: string
   type: 'box' | 'ellipse' | 'text' | 'note'
@@ -92,4 +94,18 @@ export type AskDiagramRequest = {
 export type AskDiagramResponse = {
   answer: string
   contextUpdatedAt: string | null
+}
+
+export type GetDiagramSnapshotResponse = {
+  snapshot: DiagramSnapshot | null
+  updatedAt: string | null
+}
+
+export type PublishDiagramSnapshotRequest = {
+  snapshot: DiagramSnapshot
+}
+
+export type PublishDiagramSnapshotResponse = {
+  ok: true
+  updatedAt: string
 }
