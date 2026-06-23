@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     const answer = await generateDiagramAnswer({
       question: payload.question.trim(),
-      selection: payload.selection,
+      diagram: payload.diagram,
     })
 
     const response: DiagramChatResponse = { answer }
@@ -41,8 +41,11 @@ function isDiagramChatRequest(value: unknown): value is DiagramChatRequest {
   return (
     typeof maybeRequest.question === 'string' &&
     maybeRequest.question.trim().length > 0 &&
-    !!maybeRequest.selection &&
-    Array.isArray(maybeRequest.selection.shapeIds) &&
-    Array.isArray(maybeRequest.selection.shapes)
+    !!maybeRequest.diagram &&
+    Array.isArray(maybeRequest.diagram.selectedShapeIds) &&
+    Array.isArray(maybeRequest.diagram.selectedShapes) &&
+    Array.isArray(maybeRequest.diagram.shapes) &&
+    Array.isArray(maybeRequest.diagram.bindings) &&
+    Array.isArray(maybeRequest.diagram.connections)
   )
 }

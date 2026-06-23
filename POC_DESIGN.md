@@ -4,7 +4,7 @@
 
 The proof of concept should validate one central idea:
 
-> A user can draw a diagram, select part of it, ask a question, and get an LLM answer grounded in the selected diagram context.
+> A user can draw a diagram, select part of it, ask a question, and get an LLM answer grounded in the selected element and the wider diagram context.
 
 This POC is not trying to build the final product. It should be small enough to implement quickly, while still exercising the real interaction between canvas state, selection, chat, and an LLM API call.
 
@@ -81,7 +81,7 @@ The POC does not need elaborate empty states, onboarding copy, or a landing page
 3. User selects one shape or arrow.
 4. Chat panel shows a compact summary of the current selection.
 5. User types a question, for example: "Does this link make sense?"
-6. Browser sends the question plus selected diagram context to `/api/chat`.
+6. Browser sends the question plus normalized diagram context to `/api/chat`.
 7. Server calls OpenRouter.
 8. Assistant response appears in the chat panel.
 
@@ -93,33 +93,56 @@ Use tldraw as the editor. The POC should rely on built-in tldraw behavior for dr
 
 We should avoid custom canvas tools in the first pass.
 
-### Selection Awareness
+### Diagram Awareness
 
 The app needs access to:
 
 - selected shape IDs
-- selected shape records
-- nearby or connected shapes, if easy to derive
-- page or document snapshot, if needed as fallback context
+- selected shape records with readable labels
+- all current-page shape records
+- tldraw arrow bindings
+- derived arrow connections
+- related connections for the current selection
 
-For the first version, sending only selected shape records plus the user's question is acceptable. If that produces weak answers, the next improvement is to include connected shapes and nearby labels.
+The model should receive normalized diagram context, not only raw tldraw state. Raw props can still be included as a fallback, but the useful layer is the derived graph: shapes, labels, and arrow relationships.
 
-Selection context should be serializable. Do not send the editor object or functions to the API route.
+Diagram context must be serializable. Do not send the editor object or functions to the API route.
 
-Recommended first shape context:
+Current shape context:
 
 ```ts
 type DiagramShapeContext = {
   id: string
   type: string
+  label?: string
   props?: unknown
   x?: number
   y?: number
   rotation?: number
+  bounds?: { x: number; y: number; w: number; h: number }
 }
 ```
 
-This keeps the LLM payload smaller and avoids leaking unnecessary internal editor state.
+Current diagram context:
+
+```ts
+type DiagramContext = {
+  selectedShapeIds: string[]
+  selectedShapes: DiagramShapeContext[]
+  selectedConnections: DiagramConnectionContext[]
+  shapes: DiagramShapeContext[]
+  bindings: DiagramBindingContext[]
+  connections: DiagramConnectionContext[]
+  summary: {
+    shapeCount: number
+    connectionCount: number
+    selectedShapeCount: number
+    shapeTypes: Record<string, number>
+  }
+}
+```
+
+Arrow connections are derived from tldraw arrow bindings. In a binding, `fromId` is the arrow shape and `toId` is the shape it binds to. The binding prop `terminal` tells whether the target is attached to the arrow `start` or `end`.
 
 ### Chat
 
@@ -159,10 +182,7 @@ Request shape:
 ```ts
 type DiagramChatRequest = {
   question: string
-  selection: {
-    shapeIds: string[]
-    shapes: DiagramShapeContext[]
-  }
+  diagram: DiagramContext
   recentMessages?: {
     role: 'user' | 'assistant'
     content: string
@@ -181,7 +201,7 @@ type DiagramChatResponse = {
 The route should:
 
 1. validate that `question` exists
-2. validate that `selection` has the expected shape
+2. validate that `diagram` has the expected shape
 3. read `OPENROUTER_API_KEY` from the environment
 4. build a focused prompt
 5. call OpenRouter
@@ -198,8 +218,11 @@ System message:
 ```txt
 You are DiagramTalk, an assistant that helps reason about diagrams.
 
-The user selected part of a tldraw diagram and asked a question.
-Answer based only on the provided diagram context.
+The user is working in a tldraw diagram and asked a question.
+You receive normalized diagram context: selected shapes, all current-page shapes, arrow bindings, and derived connections.
+Use selectedShapes and selectedConnections first, then the wider shapes and connections if needed.
+Treat connections as arrow relationships where startShapeId is the arrow start and endShapeId is the arrow end.
+Use arrowheadStart and arrowheadEnd to reason about directionality.
 If the context is insufficient, say what additional diagram information would help.
 Be concise, practical, and explicit about uncertainty.
 Do not claim to see diagram elements that are not present in the provided context.
@@ -212,8 +235,8 @@ User message:
 User question:
 {question}
 
-Selected diagram context:
-{selectionJson}
+Diagram context:
+{diagramJson}
 ```
 
 The model should receive compact JSON. Pretty-printed JSON is acceptable for debugging during the POC.
@@ -270,8 +293,8 @@ Responsibilities:
 
 - render the tldraw editor
 - keep a reference to the tldraw editor instance
-- track selected shape IDs and selected shape records
-- pass selection context into the chat panel
+- track selected shape IDs, selected shape records, current-page shapes, arrow bindings, and derived connections
+- pass diagram context into the chat panel
 
 Implementation notes:
 
@@ -290,7 +313,7 @@ Responsibilities:
 
 - render conversation messages
 - render input form
-- submit question and selection context to `/api/chat`
+- submit question and diagram context to `/api/chat`
 - show loading and error states
 
 Implementation notes:
@@ -299,7 +322,7 @@ Implementation notes:
 - append the assistant response when the call succeeds
 - append or display an error when the call fails
 - send the last few messages only if conversation context becomes useful
-- keep the first version simple: selection context plus current question is enough
+- keep the first version focused: current question plus normalized diagram context is enough
 
 ### `SelectionSummary`
 
@@ -317,18 +340,25 @@ The summary should not dump raw JSON into the UI. It should be compact and reada
 
 Contains helper functions for extracting useful context from the tldraw editor.
 
-The first implementation can be intentionally simple:
+The implementation should extract the current page and normalize it for the LLM:
 
 ```ts
-getSelectedDiagramContext(editor) => {
+getCurrentDiagramContext(editor) => {
+  const shapes = editor.getCurrentPageShapesInReadingOrder()
+
   return {
-    shapeIds: editor.getSelectedShapeIds(),
-    shapes: editor.getSelectedShapes().map(toDiagramShapeContext),
+    selectedShapeIds: editor.getSelectedShapeIds(),
+    selectedShapes: /* selected normalized shapes */,
+    selectedConnections: /* connections touching selected shapes or arrows */,
+    shapes: shapes.map(toDiagramShapeContext),
+    bindings: /* arrow bindings */,
+    connections: /* derived arrow connections */,
+    summary: /* shape and connection counts */,
   }
 }
 ```
 
-Later, this can expand to connected arrows, neighboring shapes, page bounds, or screenshots.
+Later, this can expand to nearby labels, page regions, screenshots, and semantic grouping.
 
 Recommended helper:
 
@@ -337,9 +367,11 @@ function toDiagramShapeContext(shape) {
   return {
     id: shape.id,
     type: shape.type,
+    label: /* plaintext rich text label, when available */,
     x: shape.x,
     y: shape.y,
     rotation: shape.rotation,
+    bounds: /* page bounds */,
     props: shape.props,
   }
 }
@@ -363,7 +395,7 @@ Recommended API:
 ```ts
 type GenerateDiagramAnswerInput = {
   question: string
-  selection: DiagramSelectionContext
+  diagram: DiagramContext
 }
 
 async function generateDiagramAnswer(input: GenerateDiagramAnswerInput): Promise<string>

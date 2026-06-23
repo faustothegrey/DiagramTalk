@@ -1,11 +1,11 @@
-import type { DiagramSelectionContext } from './types'
+import type { DiagramContext } from './types'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'
 
 type GenerateDiagramAnswerInput = {
   question: string
-  selection: DiagramSelectionContext
+  diagram: DiagramContext
 }
 
 type OpenRouterResponse = {
@@ -21,7 +21,7 @@ type OpenRouterResponse = {
 
 export async function generateDiagramAnswer({
   question,
-  selection,
+  diagram,
 }: GenerateDiagramAnswerInput): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY
 
@@ -44,8 +44,11 @@ export async function generateDiagramAnswer({
           role: 'system',
           content:
             'You are DiagramTalk, an assistant that helps reason about diagrams.\n\n' +
-            'The user selected part of a tldraw diagram and asked a question.\n' +
-            'Answer based only on the provided diagram context.\n' +
+            'The user is working in a tldraw diagram and asked a question.\n' +
+            'You receive normalized diagram context: selected shapes, all current-page shapes, arrow bindings, and derived connections.\n' +
+            'Use selectedShapes and selectedConnections first, then the wider shapes and connections if needed.\n' +
+            'Treat connections as arrow relationships where startShapeId is the arrow start and endShapeId is the arrow end.\n' +
+            'Use arrowheadStart and arrowheadEnd to reason about directionality.\n' +
             'If the context is insufficient, say what additional diagram information would help.\n' +
             'Be concise, practical, and explicit about uncertainty.\n' +
             'Do not claim to see diagram elements that are not present in the provided context.\n' +
@@ -55,7 +58,7 @@ export async function generateDiagramAnswer({
           role: 'user',
           content:
             `User question:\n${question}\n\n` +
-            `Selected diagram context:\n${JSON.stringify(selection, null, 2)}`,
+            `Diagram context:\n${JSON.stringify(diagram, null, 2)}`,
         },
       ],
     }),

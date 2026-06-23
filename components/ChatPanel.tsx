@@ -5,14 +5,14 @@ import { SelectionSummary } from '@/components/SelectionSummary'
 import type {
   ChatMessage,
   DiagramChatResponse,
-  DiagramSelectionContext,
+  DiagramContext,
 } from '@/lib/types'
 
 type ChatPanelProps = {
-  selection: DiagramSelectionContext
+  diagram: DiagramContext
 }
 
-export function ChatPanel({ selection }: ChatPanelProps) {
+export function ChatPanel({ diagram }: ChatPanelProps) {
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -51,7 +51,7 @@ export function ChatPanel({ selection }: ChatPanelProps) {
         },
         body: JSON.stringify({
           question: trimmedQuestion,
-          selection,
+          diagram,
           recentMessages,
         }),
       })
@@ -85,7 +85,7 @@ export function ChatPanel({ selection }: ChatPanelProps) {
         <p className="chatSubtitle">Ask about the selected part of the diagram.</p>
       </header>
 
-      <SelectionSummary selection={selection} />
+      <SelectionSummary diagram={diagram} />
 
       <div className="messageList" aria-live="polite">
         {messages.length === 0 ? (
@@ -126,7 +126,9 @@ export function ChatPanel({ selection }: ChatPanelProps) {
         />
         <div className="submitRow">
           <span className="submitHint">
-            {selection.shapes.length === 0 ? 'No selection will be sent.' : 'Selection context will be sent.'}
+            {diagram.selectedShapes.length === 0
+              ? 'Full diagram context will be sent.'
+              : 'Selection and diagram context will be sent.'}
           </span>
           <button className="submitButton" disabled={!canSubmit} type="submit">
             Send

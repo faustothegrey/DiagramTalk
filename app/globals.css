@@ -113,6 +113,21 @@ textarea {
   word-break: break-word;
 }
 
+.connectionList {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.connectionList li {
+  overflow-wrap: anywhere;
+}
+
 .messageList {
   display: flex;
   flex-direction: column;

@@ -3,19 +3,29 @@
 import { useCallback, useState } from 'react'
 import { Tldraw, useEditor, useReactor } from 'tldraw'
 import { ChatPanel } from '@/components/ChatPanel'
-import { getSelectedDiagramContext } from '@/lib/diagramContext'
-import type { DiagramSelectionContext } from '@/lib/types'
+import { getCurrentDiagramContext } from '@/lib/diagramContext'
+import type { DiagramContext } from '@/lib/types'
 
-const emptySelection: DiagramSelectionContext = {
-  shapeIds: [],
+const emptyDiagram: DiagramContext = {
+  selectedShapeIds: [],
+  selectedShapes: [],
+  selectedConnections: [],
   shapes: [],
+  bindings: [],
+  connections: [],
+  summary: {
+    shapeCount: 0,
+    connectionCount: 0,
+    selectedShapeCount: 0,
+    shapeTypes: {},
+  },
 }
 
 export function DiagramWorkspace() {
-  const [selection, setSelection] = useState<DiagramSelectionContext>(emptySelection)
+  const [diagram, setDiagram] = useState<DiagramContext>(emptyDiagram)
 
-  const handleSelectionChange = useCallback((nextSelection: DiagramSelectionContext) => {
-    setSelection(nextSelection)
+  const handleDiagramChange = useCallback((nextDiagram: DiagramContext) => {
+    setDiagram(nextDiagram)
   }, [])
 
   return (
@@ -23,28 +33,28 @@ export function DiagramWorkspace() {
       <section className="canvasRegion" aria-label="Whiteboard">
         <div className="canvasFrame">
           <Tldraw>
-            <SelectionTracker onSelectionChange={handleSelectionChange} />
+            <DiagramContextTracker onDiagramChange={handleDiagramChange} />
           </Tldraw>
         </div>
       </section>
-      <ChatPanel selection={selection} />
+      <ChatPanel diagram={diagram} />
     </main>
   )
 }
 
-type SelectionTrackerProps = {
-  onSelectionChange: (selection: DiagramSelectionContext) => void
+type DiagramContextTrackerProps = {
+  onDiagramChange: (diagram: DiagramContext) => void
 }
 
-function SelectionTracker({ onSelectionChange }: SelectionTrackerProps) {
+function DiagramContextTracker({ onDiagramChange }: DiagramContextTrackerProps) {
   const editor = useEditor()
 
   useReactor(
-    'track selected diagram context',
+    'track diagram context',
     () => {
-      onSelectionChange(getSelectedDiagramContext(editor))
+      onDiagramChange(getCurrentDiagramContext(editor))
     },
-    [editor, onSelectionChange],
+    [editor, onDiagramChange],
   )
 
   return null
