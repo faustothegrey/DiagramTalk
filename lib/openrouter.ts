@@ -1,7 +1,7 @@
 import type { DiagramSelectionContext } from './types'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-const DEFAULT_MODEL = 'openai/gpt-4.1-mini'
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'
 
 type GenerateDiagramAnswerInput = {
   question: string

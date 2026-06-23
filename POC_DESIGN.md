@@ -227,7 +227,7 @@ The POC can use one default model. If `OPENROUTER_MODEL` is set, use it. Otherwi
 Recommended configuration:
 
 ```ts
-const model = process.env.OPENROUTER_MODEL ?? 'openai/gpt-4.1-mini'
+const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4.5'
 ```
 
 If that model is not available in the user's OpenRouter account, the environment variable can override it without code changes.
@@ -389,7 +389,7 @@ Add `.env.local` locally:
 
 ```txt
 OPENROUTER_API_KEY=your_key_here
-OPENROUTER_MODEL=openai/gpt-4.1-mini
+OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
 ```
 
 The `.env.local` file should not be committed.
