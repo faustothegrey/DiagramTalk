@@ -53,6 +53,16 @@ export type CreateConnectionInput = {
   routing?: ConnectionRouting
 }
 
+// Camera is a view-only operation; it never mutates or persists shapes.
+//  - 'fit'      zoom to fit all content, centered (optional padding px).
+//  - 'topLeft'  frame content near the viewport's top-left, leaving the
+//               right/bottom open (optional margin px; optional explicit zoom).
+//  - 'absolute' set the camera directly (page x/y + zoom).
+export type SetCameraInput =
+  | { mode: 'fit'; padding?: number }
+  | { mode: 'topLeft'; margin?: number; zoom?: number }
+  | { mode: 'absolute'; x: number; y: number; zoom: number }
+
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'
 
 type DiagramCommandBase = {
@@ -81,10 +91,16 @@ export type ClearDiagramCommand = DiagramCommandBase & {
   type: 'clearDiagram'
 }
 
+export type SetCameraCommand = DiagramCommandBase & {
+  type: 'setCamera'
+  input: SetCameraInput
+}
+
 export type DiagramCommand =
   | CreateShapeCommand
   | CreateConnectionCommand
   | ClearDiagramCommand
+  | SetCameraCommand
 
 export type GetDiagramContextResponse = {
   context: DiagramContext | null
@@ -115,6 +131,11 @@ export type CreateDiagramCommandRequest =
     }
   | {
       type: 'clearDiagram'
+      diagramId?: string
+    }
+  | {
+      type: 'setCamera'
+      input: SetCameraInput
       diagramId?: string
     }
 

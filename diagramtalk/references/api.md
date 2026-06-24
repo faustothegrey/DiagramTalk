@@ -170,8 +170,30 @@ set, the open app tab **auto-activates** that diagram — it switches to it,
 applies the command, and saves — so edits land on the right diagram without a
 separate `use` call. (tldraw runs only in the browser, so this still needs an
 app tab open; the targeted diagram becomes the active one afterward.) The CLI
-exposes this as `--diagram <id>` on `shape`, `connect`, `clear`, `layout`, and
-`render`.
+exposes this as `--diagram <id>` on `shape`, `connect`, `clear`, `layout`,
+`render`, and `camera`.
+
+Move the camera (view only — never mutates or persists shapes):
+
+```json
+{ "type": "setCamera", "input": { "mode": "topLeft", "margin": 40 } }
+```
+
+`input` is one of three mutually-exclusive modes:
+
+- `{ "mode": "fit", "padding"?: number }` — zoom to fit all content, centered
+  (`padding` is the inset in px, default 32).
+- `{ "mode": "topLeft", "margin"?: number, "zoom"?: number }` — frame the
+  content near the viewport's top-left, leaving the right/bottom open (where the
+  flow extends). `margin` is px from the top-left edge (default 40); `zoom` is an
+  explicit zoom, otherwise one is picked so the diagram sits in roughly the
+  upper-left of the viewport.
+- `{ "mode": "absolute", "x": number, "y": number, "zoom": number }` — set the
+  tldraw camera directly (page coordinates + zoom).
+
+Honors `diagramId` (auto-activates that diagram before framing). With no content
+on the page, `fit`/`topLeft` are no-ops. CLI: `camera --fit [--padding N]`,
+`camera --top-left [--margin N] [--zoom Z]`, `camera --x X --y Y --zoom Z`.
 
 ### `GET /api/diagram/commands`
 

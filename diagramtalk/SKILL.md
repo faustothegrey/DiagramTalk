@@ -249,6 +249,21 @@ python3 scripts/diagramtalk.py render --out /tmp/diagram.png          # png
 python3 scripts/diagramtalk.py render --format svg --out /tmp/diagram.svg
 ```
 
+Move the on-screen view (camera only — never changes shapes). Use this to frame
+the live viewport, e.g. so the diagram sits top-left with the right/bottom open
+for where the flow will extend:
+
+```bash
+python3 scripts/diagramtalk.py camera --fit                  # whole diagram, centered
+python3 scripts/diagramtalk.py camera --top-left             # upper-left, room to the right
+python3 scripts/diagramtalk.py camera --top-left --margin 60 --zoom 1
+python3 scripts/diagramtalk.py camera --x 0 --y 0 --zoom 1   # absolute
+```
+
+Note: `render` always exports the content's bounding box, so it does **not**
+reflect the camera/viewport framing — `camera` controls what a person sees in
+the app, not the rendered image.
+
 ## Important Constraints
 
 - Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`: with no app tab open the render request stays unfulfilled and the CLI times out.

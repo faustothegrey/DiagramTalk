@@ -25,6 +25,7 @@ import type {
   ListDiagramCommandsResponse,
   RenderFormat,
   RenderMetaResponse,
+  SetCameraCommand,
 } from '@/lib/diagramApiTypes'
 import type { DiagramContext } from '@/lib/types'
 
@@ -265,6 +266,11 @@ function applyDiagramCommand(editor: Editor, command: DiagramCommand) {
     return
   }
 
+  if (command.type === 'setCamera') {
+    applySetCameraCommand(editor, command)
+    return
+  }
+
   applyCreateConnectionCommand(editor, command)
 }
 
@@ -273,6 +279,42 @@ function applyClearDiagramCommand(editor: Editor) {
   if (ids.length > 0) {
     editor.deleteShapes(ids)
   }
+}
+
+// Camera is view-only: it never creates, moves, or deletes shapes.
+function applySetCameraCommand(editor: Editor, command: SetCameraCommand) {
+  const input = command.input
+
+  if (input.mode === 'absolute') {
+    editor.setCamera({ x: input.x, y: input.y, z: input.zoom })
+    return
+  }
+
+  const bounds = editor.getCurrentPageBounds()
+  if (!bounds) return // nothing on the page to frame
+
+  if (input.mode === 'fit') {
+    editor.zoomToBounds(bounds, { inset: input.padding ?? 32 })
+    return
+  }
+
+  // 'topLeft': frame content near the viewport's top-left, leaving the
+  // right/bottom open (where the flow naturally extends).
+  const margin = input.margin ?? 40
+  const viewport = editor.getViewportScreenBounds()
+  // Default zoom shows the whole diagram while keeping it in roughly the
+  // upper-left of the viewport so empty canvas remains to the right/below.
+  const z =
+    input.zoom ??
+    Math.max(0.1, Math.min((viewport.w * 0.6) / bounds.w, (viewport.h * 0.9) / bounds.h, 1))
+
+  // viewport-relative screen = (page + camera) * z, so to put the content's
+  // top-left at (margin, margin): camera = margin/z - pageTopLeft.
+  editor.setCamera({
+    x: margin / z - bounds.minX,
+    y: margin / z - bounds.minY,
+    z,
+  })
 }
 
 function applyCreateShapeCommand(editor: Editor, command: CreateShapeCommand) {

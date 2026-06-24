@@ -189,6 +189,33 @@ def cmd_clear(args):
     )
 
 
+def cmd_camera(args):
+    # View-only: moves the tldraw camera, never the shapes.
+    if args.fit:
+        inp = {"mode": "fit"}
+        if args.padding is not None:
+            inp["padding"] = args.padding
+    elif args.top_left:
+        inp = {"mode": "topLeft"}
+        if args.margin is not None:
+            inp["margin"] = args.margin
+        if args.zoom is not None:
+            inp["zoom"] = args.zoom
+    elif args.x is not None and args.y is not None and args.zoom is not None:
+        inp = {"mode": "absolute", "x": args.x, "y": args.y, "zoom": args.zoom}
+    else:
+        raise SystemExit(
+            "camera: pass --fit, --top-left, or an absolute --x --y --zoom."
+        )
+    print_json(
+        request(
+            "POST",
+            "/api/diagram/commands",
+            with_diagram({"type": "setCamera", "input": inp}, args.diagram),
+        )
+    )
+
+
 def cmd_render(args):
     # Rendering is pull-based: ask the server to request a fresh render, wait for
     # the browser bridge to export and upload it, then download the bytes. The app
@@ -731,6 +758,26 @@ def build_parser():
     )
     clear.add_argument("--diagram", help="Target diagram id (default: active).")
     clear.set_defaults(func=cmd_clear)
+
+    camera = subparsers.add_parser(
+        "camera",
+        help="Move the view (camera) without changing shapes. Needs the app tab open.",
+    )
+    camera.add_argument("--fit", action="store_true", help="Zoom to fit all content, centered.")
+    camera.add_argument(
+        "--top-left", dest="top_left", action="store_true",
+        help="Frame content at the upper-left, leaving the right/bottom open.",
+    )
+    camera.add_argument("--padding", type=float, help="Inset px for --fit.")
+    camera.add_argument("--margin", type=float, help="Top-left margin px for --top-left.")
+    camera.add_argument("--x", type=float, help="Absolute camera x (page coords).")
+    camera.add_argument("--y", type=float, help="Absolute camera y (page coords).")
+    camera.add_argument(
+        "--zoom", type=float,
+        help="Zoom level (optional for --top-left; required with --x/--y for absolute).",
+    )
+    camera.add_argument("--diagram", help="Target diagram id (default: active).")
+    camera.set_defaults(func=cmd_camera)
 
     render = subparsers.add_parser(
         "render",

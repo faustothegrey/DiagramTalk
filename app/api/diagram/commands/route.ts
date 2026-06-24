@@ -56,6 +56,8 @@ export async function POST(request: Request) {
     command = { ...baseCommand, type: 'createShape', input: payload.input }
   } else if (payload.type === 'createConnection') {
     command = { ...baseCommand, type: 'createConnection', input: payload.input }
+  } else if (payload.type === 'setCamera') {
+    command = { ...baseCommand, type: 'setCamera', input: payload.input }
   } else {
     command = { ...baseCommand, type: 'clearDiagram' }
   }
@@ -94,6 +96,29 @@ function isCreateDiagramCommandRequest(
     return true
   }
 
+  if (maybeRequest.type === 'setCamera') {
+    return isSetCameraInput((maybeRequest as { input?: unknown }).input)
+  }
+
+  return false
+}
+
+function isSetCameraInput(value: unknown) {
+  if (!value || typeof value !== 'object') return false
+
+  const input = value as Record<string, unknown>
+  const isFiniteNumber = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
+  const isOptionalNumber = (v: unknown) => v === undefined || isFiniteNumber(v)
+
+  if (input.mode === 'fit') {
+    return isOptionalNumber(input.padding)
+  }
+  if (input.mode === 'topLeft') {
+    return isOptionalNumber(input.margin) && isOptionalNumber(input.zoom)
+  }
+  if (input.mode === 'absolute') {
+    return isFiniteNumber(input.x) && isFiniteNumber(input.y) && isFiniteNumber(input.zoom)
+  }
   return false
 }
 
