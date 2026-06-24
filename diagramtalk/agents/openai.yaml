@@ -1,0 +1,3 @@
+display_name: DiagramTalk
+short_description: Work with local DiagramTalk diagrams and the supporting API.
+default_prompt: Use DiagramTalk to inspect or modify the local diagram, and use the API when it is the right transport.

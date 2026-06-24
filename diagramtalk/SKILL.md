@@ -1,24 +1,23 @@
 ---
-name: diagramtalk-api
-description: Interact with a local DiagramTalk whiteboard app through its HTTP API, and generate readable diagrams whose layout is physically verified (no overlapping boxes, no arrows cutting through shapes) rather than guessed from coordinates. Use when Codex or another agent needs to inspect the current diagram, add shapes or connections, ask the DiagramTalk LLM about the canvas, verify snapshot persistence, or generate diagrams programmatically in the running Next.js/tldraw app.
+name: diagramtalk
+description: Work with a local DiagramTalk whiteboard app, inspect and modify the canvas, ask the DiagramTalk LLM about the diagram, and generate readable layouts that are checked for overlaps and arrow crossings rather than guessed from coordinates. Use when Codex or another agent needs to inspect the current diagram, add shapes or connections, verify snapshot persistence, improve diagram readability, or generate diagrams programmatically in the running Next.js/tldraw app.
 ---
 
-# DiagramTalk API
+# DiagramTalk
 
 ## Core principle — coordinates are claims; geometry is truth
 
-**Verify geometry, don't infer it.** A diagram is correct only when you have
-*computed* that its elements don't physically collide — boxes against boxes, and
-every arrow's whole path against every box — and have *looked at a render*.
-Coordinates that "look fine" are not evidence: an `(x, y)` is an anchor, not a
-footprint, and an arrow collides everywhere between its endpoints, not just at
-them.
+**Verify geometry, don't infer it.** A diagram is only as correct as the
+checks you actually ran. Compute the geometry first, then confirm it with a
+render. Coordinates that "look fine" are not evidence: an `(x, y)` is an
+anchor, not a footprint, and an arrow can cross a box anywhere between its
+endpoints, not just at them.
 
 This is the linchpin of the skill. Auto-sizing, lanes, anchors, and colors all
-exist to produce a diagram that **passes a physical check** — never one that
-merely has tidy numbers. A diagram is not "done" until `layout … --dry-run`
-shows empty `overlaps`, every remaining `arrowCrossing` is acknowledged (not
-silently shipped), and you have seen a render. Full statement and corollaries:
+exist to produce a diagram that **passes the checks we implement**. A diagram
+is not "done" until `layout … --dry-run` shows empty `overlaps`, every
+remaining `arrowCrossing` is acknowledged, and you have seen a render. Full
+statement and corollaries:
 [`PRINCIPLES.md`](PRINCIPLES.md).
 
 ## Overview

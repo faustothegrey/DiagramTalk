@@ -1,3 +1,0 @@
-display_name: DiagramTalk API
-short_description: Control local DiagramTalk diagrams by API.
-default_prompt: Use DiagramTalk API to inspect or modify the local diagram.

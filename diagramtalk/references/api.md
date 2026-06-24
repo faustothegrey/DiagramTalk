@@ -1,4 +1,4 @@
-# DiagramTalk API Reference
+# DiagramTalk Reference
 
 Default base URL:
 
