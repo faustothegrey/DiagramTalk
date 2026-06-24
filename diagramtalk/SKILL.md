@@ -44,29 +44,39 @@ DIAGRAMTALK_URL=http://localhost:3001 python3 scripts/diagramtalk.py context
 curl -I "${DIAGRAMTALK_URL:-http://localhost:3000}"
 ```
 
-2. Inspect current diagram context before changing it:
+2. Pick the diagram to work on. A workspace holds several named diagrams but
+   only one is **active**, and every command acts on the active one. List them
+   and, if needed, switch or create one before editing:
+
+```bash
+python3 scripts/diagramtalk.py diagrams          # list all + the active id
+python3 scripts/diagramtalk.py new "My Diagram"  # create one and make it active
+python3 scripts/diagramtalk.py use <id>          # switch the active diagram
+```
+
+3. Inspect current diagram context before changing it:
 
 ```bash
 python3 scripts/diagramtalk.py context
 ```
 
-3. For anything bigger than one or two shapes, describe the diagram in a
+4. For anything bigger than one or two shapes, describe the diagram in a
    **layout spec** and let the engine compute collision-free coordinates
    instead of placing shapes by hand (see "Readability & Layout" below). Use
    `shape`/`connect` only for small edits.
 
-4. **Verify the geometry before posting (the core gate).** Run the spec through
+5. **Verify the geometry before posting (the core gate).** Run the spec through
    `layout … --dry-run` and read the physical collision report. Do not post
    until `overlaps` is empty and every `arrowCrossing` is either gone or
    consciously accepted. See "Readability & Layout" for the report format.
 
-5. Post (`layout … --post`) and wait for the browser bridge to apply commands:
+6. Post (`layout … --post`) and wait for the browser bridge to apply commands:
 
 ```bash
 python3 scripts/diagramtalk.py commands --status pending
 ```
 
-6. **Confirm with your eyes, not just the report.** Verify the diagram context
+7. **Confirm with your eyes, not just the report.** Verify the diagram context
    and saved snapshot, and look at a render of the result — geometric checks and
    visual checks fail differently, so use both ([`PRINCIPLES.md`](PRINCIPLES.md)).
 
@@ -187,17 +197,27 @@ python3 scripts/diagramtalk.py ask \
   "What are the main states in this diagram?"
 ```
 
-Check saved snapshot metadata/content:
+Check the active diagram's saved snapshot metadata/content:
 
 ```bash
 python3 scripts/diagramtalk.py snapshot
+```
+
+Manage diagrams (list, create + activate, switch, rename, delete):
+
+```bash
+python3 scripts/diagramtalk.py diagrams
+python3 scripts/diagramtalk.py new "AgentTalk Consensus Protocol"
+python3 scripts/diagramtalk.py use <id>
+python3 scripts/diagramtalk.py rename <id> "New name"
+python3 scripts/diagramtalk.py delete <id>
 ```
 
 ## Important Constraints
 
 - Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw.
 - Server command queue state is in memory and resets on Next.js restart.
-- Diagram snapshots persist locally in `.diagramtalk/diagram-snapshot.json`.
+- Diagrams persist locally, one file per diagram in `.diagramtalk/diagrams/<id>.json`, with the active pointer in `.diagramtalk/index.json`. Only the active diagram is loaded in the editor and acted on by commands.
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
 - Use stable caller-provided IDs when generating diagrams so later commands can connect to known shapes.
 - Shape IDs accepted by the API may be bare IDs like `agent-a` or full tldraw IDs like `shape:agent-a`.

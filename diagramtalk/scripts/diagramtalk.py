@@ -115,6 +115,36 @@ def cmd_snapshot(_args):
     print_json(request("GET", "/api/diagram/snapshot"))
 
 
+# --- Diagram management ----------------------------------------------------
+# A workspace holds several named diagrams but only ONE is active at a time.
+# The active diagram is the one every command/context/snapshot call acts on,
+# so switching the active diagram redirects where new shapes land.
+
+def cmd_diagrams(_args):
+    print_json(request("GET", "/api/diagrams"))
+
+
+def cmd_new_diagram(args):
+    # Creating a diagram also makes it the active one.
+    print_json(request("POST", "/api/diagrams", {"name": args.name}))
+
+
+def cmd_use_diagram(args):
+    print_json(
+        request("PATCH", f"/api/diagrams/{args.id}", {"active": True})
+    )
+
+
+def cmd_rename_diagram(args):
+    print_json(
+        request("PATCH", f"/api/diagrams/{args.id}", {"name": args.name})
+    )
+
+
+def cmd_delete_diagram(args):
+    print_json(request("DELETE", f"/api/diagrams/{args.id}"))
+
+
 def cmd_commands(args):
     path = "/api/diagram/commands"
     if args.status:
@@ -515,8 +545,34 @@ def build_parser():
     context = subparsers.add_parser("context", help="Get latest normalized diagram context.")
     context.set_defaults(func=cmd_context)
 
-    snapshot = subparsers.add_parser("snapshot", help="Get saved tldraw snapshot.")
+    snapshot = subparsers.add_parser("snapshot", help="Get the active diagram's saved tldraw snapshot.")
     snapshot.set_defaults(func=cmd_snapshot)
+
+    diagrams = subparsers.add_parser(
+        "diagrams", help="List all diagrams and the active one."
+    )
+    diagrams.set_defaults(func=cmd_diagrams)
+
+    new_diagram = subparsers.add_parser(
+        "new", help="Create a new diagram and make it active."
+    )
+    new_diagram.add_argument("name", nargs="?", default=None, help="Optional diagram name.")
+    new_diagram.set_defaults(func=cmd_new_diagram)
+
+    use_diagram = subparsers.add_parser(
+        "use", help="Make a diagram active (subsequent commands act on it)."
+    )
+    use_diagram.add_argument("id", help="Diagram id (see `diagrams`).")
+    use_diagram.set_defaults(func=cmd_use_diagram)
+
+    rename_diagram = subparsers.add_parser("rename", help="Rename a diagram.")
+    rename_diagram.add_argument("id", help="Diagram id (see `diagrams`).")
+    rename_diagram.add_argument("name", help="New diagram name.")
+    rename_diagram.set_defaults(func=cmd_rename_diagram)
+
+    delete_diagram = subparsers.add_parser("delete", help="Delete a diagram.")
+    delete_diagram.add_argument("id", help="Diagram id (see `diagrams`).")
+    delete_diagram.set_defaults(func=cmd_delete_diagram)
 
     commands = subparsers.add_parser("commands", help="List diagram commands.")
     commands.add_argument("--status", choices=["pending", "applied", "failed"])

@@ -8,6 +8,17 @@ http://localhost:3000
 
 Set `DIAGRAMTALK_URL` to override it.
 
+## Active diagram
+
+A workspace holds several named diagrams, but only **one is active at a time**.
+The active diagram is the one loaded in the browser editor, so every
+`/api/diagram/*` call (context, snapshot, commands, ask) acts on the active
+diagram. To target a different diagram, make it active first
+(`PATCH /api/diagrams/{id}` with `{ "active": true }`, or `diagramtalk.py use <id>`).
+
+Diagrams are stored one file per diagram under `.diagramtalk/diagrams/<id>.json`,
+with the active pointer in `.diagramtalk/index.json`.
+
 ## Endpoints
 
 ### `GET /api/diagram/context`
@@ -24,7 +35,46 @@ Useful fields:
 
 ### `GET /api/diagram/snapshot`
 
-Returns the saved tldraw snapshot and `updatedAt`. Snapshots are stored in `.diagramtalk/diagram-snapshot.json`.
+Returns the **active** diagram's saved tldraw snapshot, along with its `id`,
+`name`, and `updatedAt`.
+
+### `GET /api/diagrams`
+
+Lists every diagram and the active one:
+
+```json
+{
+  "activeId": "3160cad0-...",
+  "diagrams": [
+    { "id": "3160cad0-...", "name": "AgentTalk Consensus Protocol",
+      "createdAt": "...", "updatedAt": "..." }
+  ]
+}
+```
+
+### `POST /api/diagrams`
+
+Creates a new diagram and makes it active. Body: `{ "name": "My diagram" }`
+(`name` optional). Returns `{ "diagram": {...}, "activeId": "<new id>" }`.
+
+### `GET /api/diagrams/{id}`
+
+Returns a single diagram (including its `snapshot`) and the current `activeId`.
+
+### `PATCH /api/diagrams/{id}`
+
+Updates a diagram. Any subset of:
+
+- `name`: rename (string, or `null` to clear).
+- `snapshot`: replace the stored tldraw snapshot.
+- `active`: `true` to make this diagram the active one.
+
+Returns `{ "diagram": {...}, "activeId": "..." }`.
+
+### `DELETE /api/diagrams/{id}`
+
+Deletes a diagram. If the deleted diagram was active, the most recently created
+remaining diagram becomes active. Returns `{ "deleted": true, "activeId": "..." }`.
 
 ### `POST /api/diagram/commands`
 
