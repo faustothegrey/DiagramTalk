@@ -1,0 +1,66 @@
+{
+  "config": {
+    "originX": 80,
+    "originY": 120,
+    "colGap": 90,
+    "rowPitch": 190,
+    "annotationGap": 70
+  },
+  "lanes": [
+    {
+      "id": "actors",
+      "type": "ellipse",
+      "nodes": [
+        { "id": "agt-user", "label": "User / UI" },
+        { "id": "agt-orchestrator", "label": "Orchestrator" },
+        { "id": "agt-planner-a", "label": "Planner A (initiator)" },
+        { "id": "agt-planner-b", "label": "Planner B (peer)" },
+        { "id": "agt-worker", "label": "Worker" }
+      ]
+    },
+    {
+      "id": "spine",
+      "type": "box",
+      "grid": true,
+      "nodes": [
+        { "id": "agt-ack", "label": "Ack" },
+        { "id": "agt-facts", "label": "Fact Collect" },
+        { "id": "agt-discussion", "label": "Discussion" },
+        { "id": "agt-proposal", "label": "Proposal" },
+        { "id": "agt-endorsement", "label": "Endorsement" },
+        { "id": "agt-submittal", "label": "Submittal" },
+        { "id": "agt-confirm", "label": "User Confirm" },
+        { "id": "agt-delegate", "label": "Delegate" },
+        { "id": "agt-complete", "label": "Work Done" }
+      ]
+    },
+    {
+      "id": "branches",
+      "type": "box",
+      "nodes": [
+        { "id": "agt-interrupted", "label": "Interrupted", "col": 3 },
+        { "id": "agt-reject", "label": "Reject → re-plan", "col": 6 }
+      ]
+    }
+  ],
+  "annotations": [
+    { "id": "agt-rule-initiator", "label": "Rule: initiator leads, peer responds" },
+    { "id": "agt-rule-endorser", "label": "Rule: endorser ≠ submitter" },
+    { "id": "agt-regression", "label": "Regression: rank drops → confirm (max 2)" },
+    { "id": "agt-violation", "label": "Violation → interrupt" },
+    { "id": "agt-fallback", "label": "Fallback to discussion (max 2)" },
+    { "id": "agt-timers", "label": "Timers: facts 480s, watchdog 900s, urgency 120s" }
+  ],
+  "edges": [
+    { "id": "agt-e-ack-facts", "from": "agt-ack", "to": "agt-facts", "label": "both acked" },
+    { "id": "agt-e-facts-disc", "from": "agt-facts", "to": "agt-discussion", "label": "both facts in" },
+    { "id": "agt-e-disc-prop", "from": "agt-discussion", "to": "agt-proposal", "label": "propose" },
+    { "id": "agt-e-prop-endo", "from": "agt-proposal", "to": "agt-endorsement", "label": "request acceptance" },
+    { "id": "agt-e-endo-subm", "from": "agt-endorsement", "to": "agt-submittal", "label": "endorsed" },
+    { "id": "agt-e-subm-conf", "from": "agt-submittal", "to": "agt-confirm", "label": "awaiting confirm" },
+    { "id": "agt-e-conf-del", "from": "agt-confirm", "to": "agt-delegate", "label": "confirm" },
+    { "id": "agt-e-del-comp", "from": "agt-delegate", "to": "agt-complete", "label": "work assign" },
+    { "id": "agt-e-prop-int", "from": "agt-proposal", "to": "agt-interrupted", "label": "violation" },
+    { "id": "agt-e-conf-rej", "from": "agt-confirm", "to": "agt-reject", "label": "reject" }
+  ]
+}

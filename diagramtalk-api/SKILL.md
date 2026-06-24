@@ -1,0 +1,162 @@
+---
+name: diagramtalk-api
+description: Interact with a local DiagramTalk whiteboard app through its HTTP API. Use when Codex or another agent needs to inspect the current diagram, add shapes or connections, ask the DiagramTalk LLM about the canvas, verify snapshot persistence, or generate diagrams programmatically in the running Next.js/tldraw app.
+---
+
+# DiagramTalk API
+
+## Overview
+
+Use this skill to interact with a running DiagramTalk app, normally at `http://localhost:3000`.
+
+Prefer the bundled CLI wrapper for routine operations:
+
+```bash
+python3 scripts/diagramtalk.py context
+```
+
+Set `DIAGRAMTALK_URL` if the app runs elsewhere.
+
+```bash
+DIAGRAMTALK_URL=http://localhost:3001 python3 scripts/diagramtalk.py context
+```
+
+## Workflow
+
+1. Check that the app is running:
+
+```bash
+curl -I "${DIAGRAMTALK_URL:-http://localhost:3000}"
+```
+
+2. Inspect current diagram context before changing it:
+
+```bash
+python3 scripts/diagramtalk.py context
+```
+
+3. For anything bigger than one or two shapes, describe the diagram in a
+   **layout spec** and let the engine compute collision-free coordinates
+   instead of placing shapes by hand (see "Readability & Layout" below). Use
+   `shape`/`connect` only for small edits.
+
+4. Wait for the browser bridge to apply commands:
+
+```bash
+python3 scripts/diagramtalk.py commands --status pending
+```
+
+5. Verify the diagram context and saved snapshot.
+
+## Readability & Layout
+
+The single biggest cause of unreadable diagrams is hand-picking `x/y` for every
+shape: shapes overlap, annotations cover the spine, and arrows cross the canvas.
+Avoid that — let the tooling handle geometry.
+
+**Rules of thumb**
+
+- **Don't compute coordinates by hand.** Use the `layout` command with a spec.
+- **Let shapes auto-size.** Omit `--w/--h` (and `w/h` in specs) so each shape is
+  sized to fit its label. Labels stay inside the box.
+- **Keep labels short.** Put long explanations in the annotation band, not in a
+  spine node.
+- **Group into lanes.** One lane per semantic row (actors, the happy-path spine,
+  branch/error states). Lanes stack vertically and never overlap.
+- **Put notes/rules in the annotation band.** Annotations render as sized boxes
+  in a reserved band below the diagram, so they never sit on top of the spine.
+  (Do not use `note` shapes for this — see `LIMITATIONS.md`.)
+- **Align branches under their spine node** with `"col": <index>` (the index of
+  the spine node in the grid lane).
+
+**Layout spec** (JSON). Lanes are drawn top-to-bottom; the lane marked
+`"grid": true` defines the column positions that other lanes align to via `col`.
+
+```json
+{
+  "config": { "originX": 80, "originY": 120, "colGap": 90, "rowPitch": 190 },
+  "lanes": [
+    { "id": "actors", "type": "ellipse",
+      "nodes": [ { "id": "user", "label": "User / UI" } ] },
+    { "id": "spine", "type": "box", "grid": true,
+      "nodes": [ { "id": "ack", "label": "Ack" },
+                 { "id": "facts", "label": "Fact Collect" } ] },
+    { "id": "branches", "type": "box",
+      "nodes": [ { "id": "interrupted", "label": "Interrupted", "col": 1 } ] }
+  ],
+  "annotations": [ { "id": "timers", "label": "Timers: facts 480s, watchdog 900s" } ],
+  "edges": [ { "id": "e1", "from": "ack", "to": "facts", "label": "both acked" } ]
+}
+```
+
+Preview the computed geometry first (this also reports any overlaps and exits
+non-zero if it finds them):
+
+```bash
+python3 scripts/diagramtalk.py \
+  layout examples/consensus-protocol.json --dry-run
+```
+
+Then queue it to the running app:
+
+```bash
+python3 scripts/diagramtalk.py \
+  layout examples/consensus-protocol.json --post
+```
+
+A complete, ready-to-run example for the AgentTalk consensus protocol is in
+`examples/consensus-protocol.json`.
+
+## Common Operations
+
+Create a shape (omit `--w/--h` to auto-size the box to its label):
+
+```bash
+python3 scripts/diagramtalk.py shape \
+  --id example-node \
+  --type box \
+  --label "Example Node" \
+  --x 100 --y 100
+```
+
+Create a connection:
+
+```bash
+python3 scripts/diagramtalk.py connect \
+  --id example-edge \
+  --from shape:example-node \
+  --to shape:other-node \
+  --label "calls"
+```
+
+Ask about the latest published diagram context:
+
+```bash
+python3 scripts/diagramtalk.py ask \
+  "What are the main states in this diagram?"
+```
+
+Check saved snapshot metadata/content:
+
+```bash
+python3 scripts/diagramtalk.py snapshot
+```
+
+## Important Constraints
+
+- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw.
+- Server command queue state is in memory and resets on Next.js restart.
+- Diagram snapshots persist locally in `.diagramtalk/diagram-snapshot.json`.
+- The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
+- Use stable caller-provided IDs when generating diagrams so later commands can connect to known shapes.
+- Shape IDs accepted by the API may be bare IDs like `agent-a` or full tldraw IDs like `shape:agent-a`.
+
+## Reference
+
+For endpoint details and payload shapes, read:
+
+- `references/api.md`
+- `examples/consensus-protocol.json` — a full layout spec example
+- `LIMITATIONS.md` — readability issues that the skill cannot fix on its own
+  because they live in the app's rendering bridge (note sizing, box text
+  auto-grow, arrow routing). Read before promising pixel-perfect output.
