@@ -37,11 +37,44 @@ textarea {
 }
 
 .workspace {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
+  grid-template-columns: minmax(0, 1fr) var(--panel-width, 400px);
   height: 100vh;
   min-width: 920px;
   overflow: hidden;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--panel-width, 400px) - 6px);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  width: 13px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizeHandle::after {
+  content: '';
+  width: 4px;
+  height: 100%;
+  /* Visible at rest so the handle is discoverable, brighter on hover/drag. */
+  background: var(--panel-border);
+  transition: background 0.12s ease;
+}
+
+.resizeHandle:hover::after,
+.resizeHandle:focus-visible::after,
+.resizeHandleActive::after {
+  background: var(--accent);
+}
+
+.resizeHandle:focus-visible {
+  outline: none;
 }
 
 .workspaceLoading {
@@ -474,5 +507,9 @@ textarea {
   .canvasRegion {
     border-right: 0;
     border-bottom: 1px solid var(--panel-border);
+  }
+
+  .resizeHandle {
+    display: none;
   }
 }
