@@ -354,12 +354,88 @@ def find_overlaps(shapes, margin=8):
     return hits
 
 
+_ANCHOR_FRACTIONS = {
+    "top": (0.5, 0.0),
+    "bottom": (0.5, 1.0),
+    "left": (0.0, 0.5),
+    "right": (1.0, 0.5),
+    "center": (0.5, 0.5),
+}
+
+
+def _anchor_point(shape, side):
+    fx, fy = _ANCHOR_FRACTIONS.get(side or "center", (0.5, 0.5))
+    return (shape["_x"] + shape["_w"] * fx, shape["_y"] + shape["_h"] * fy)
+
+
+def _segment_hits_rect(p1, p2, rect, pad=-1.0):
+    """Liang-Barsky: does the segment p1->p2 cross the (optionally inset) rect?
+
+    A negative pad shrinks the box so an arrow merely grazing a box edge along a
+    gap is not counted — only real penetration is."""
+    x1, y1 = p1
+    x2, y2 = p2
+    rx = rect["_x"] - pad
+    ry = rect["_y"] - pad
+    rw = rect["_w"] + 2 * pad
+    rh = rect["_h"] + 2 * pad
+    if rw <= 0 or rh <= 0:
+        return False
+    dx = x2 - x1
+    dy = y2 - y1
+    p = (-dx, dx, -dy, dy)
+    q = (x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1)
+    u1, u2 = 0.0, 1.0
+    for pi, qi in zip(p, q):
+        if pi == 0:
+            if qi < 0:
+                return False
+        else:
+            t = qi / pi
+            if pi < 0:
+                if t > u2:
+                    return False
+                u1 = max(u1, t)
+            else:
+                if t < u1:
+                    return False
+                u2 = min(u2, t)
+    return u1 <= u2
+
+
+def find_arrow_crossings(shapes, edges):
+    """Report every arrow whose straight path passes through a box it is not
+    connected to. This is the physical check that coordinate-only box-overlap
+    detection misses."""
+    by_id = {s["id"]: s for s in shapes}
+    crossings = []
+    for edge in edges:
+        src = by_id.get(edge["from"])
+        dst = by_id.get(edge["to"])
+        if not src or not dst:
+            continue
+        p1 = _anchor_point(src, edge.get("_fromAnchor"))
+        p2 = _anchor_point(dst, edge.get("_toAnchor"))
+        hit = []
+        for shape in shapes:
+            if shape["id"] in (edge["from"], edge["to"]):
+                continue
+            if shape["type"] == "text":
+                continue
+            if _segment_hits_rect(p1, p2, shape):
+                hit.append(shape["id"])
+        if hit:
+            crossings.append({"edge": edge.get("id") or f'{edge["from"]}->{edge["to"]}', "crosses": hit})
+    return crossings
+
+
 def cmd_layout(args):
     with open(args.spec, "r", encoding="utf-8") as handle:
         spec = json.load(handle)
 
     shapes, edges = compute_layout(spec)
     overlaps = find_overlaps(shapes)
+    arrow_crossings = find_arrow_crossings(shapes, edges)
 
     if args.dry_run or not args.post:
         report = {
@@ -390,9 +466,13 @@ def cmd_layout(args):
                 for e in edges
             ],
             "overlaps": overlaps,
-            "ok": not overlaps,
+            "arrowCrossings": arrow_crossings,
+            "ok": not overlaps and not arrow_crossings,
         }
         print_json(report)
+        # Box overlaps are a hard failure (the engine guarantees against them).
+        # Arrow crossings are reported as warnings: until elbow routing exists
+        # some long-range edges can't avoid every box, so they don't fail here.
         if overlaps:
             raise SystemExit(1)
         return

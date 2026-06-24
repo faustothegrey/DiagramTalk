@@ -107,8 +107,15 @@ solid, pattern`.
 }
 ```
 
-Preview the computed geometry first (this also reports any overlaps and exits
-non-zero if it finds them):
+Preview the computed geometry first. The dry-run runs two physical collision
+checks and reports both:
+
+- `overlaps` — boxes whose rectangles intersect (hard failure; exits non-zero).
+- `arrowCrossings` — arrows whose straight path slices through a box they are
+  not connected to (reported as warnings; line-segment vs. rectangle, so it
+  catches mid-path crossings that coordinate reading alone misses).
+
+`ok` is true only when both are empty.
 
 ```bash
 python3 scripts/diagramtalk.py \

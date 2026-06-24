@@ -71,6 +71,11 @@ avoidance — long edges remain straight diagonals. tldraw arrows are straight o
 curved (`bend`) only; real orthogonal routing would need either a custom arrow
 util or a routing pass that inserts waypoints.
 
+We can now **measure** the problem: the layout dry-run reports `arrowCrossings`
+(line-segment vs. rectangle for every arrow against every unrelated box), so we
+know exactly which arrows cut through which boxes — not just box-vs-box overlap.
+This is the metric a routing pass or the placement pass (B) would minimize.
+
 ### SVG export uses `foreignObject`
 Exported SVGs carry text in `<foreignObject>`, so some external renderers show
 empty shapes (the app renders fine). Lives in `lib/diagramExport.ts`.
