@@ -263,7 +263,9 @@ async function readLegacySnapshot(): Promise<{
 }
 
 async function writeJsonAtomically(filePath: string, value: unknown) {
-  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  // The temp name must be unique per write: concurrent saves to the same file
+  // (e.g. autosave racing a name-save) otherwise collide and one rename ENOENTs.
+  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
   await writeFile(tempPath, JSON.stringify(value), 'utf8')
   await rename(tempPath, filePath)
 }

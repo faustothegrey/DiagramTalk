@@ -1,4 +1,5 @@
 import { addDiagramCommand, listDiagramCommands } from '@/lib/diagramApiStore'
+import { getDiagram } from '@/lib/diagramStore'
 import type {
   CreateDiagramCommandRequest,
   CreateDiagramCommandResponse,
@@ -6,6 +7,8 @@ import type {
   DiagramCommandStatus,
   ListDiagramCommandsResponse,
 } from '@/lib/diagramApiTypes'
+
+export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -36,23 +39,26 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid diagram command request.' }, { status: 400 })
   }
 
+  // A command may target a specific diagram. Validate it exists so a typo can't
+  // make the browser hop to a non-existent diagram forever.
+  if (payload.diagramId !== undefined && !(await getDiagram(payload.diagramId))) {
+    return Response.json({ error: 'Target diagram not found.' }, { status: 404 })
+  }
+
   const baseCommand = {
     id: crypto.randomUUID(),
     status: 'pending' as const,
     createdAt: new Date().toISOString(),
+    ...(payload.diagramId !== undefined ? { diagramId: payload.diagramId } : {}),
   }
-  const command: DiagramCommand =
-    payload.type === 'createShape'
-      ? {
-          ...baseCommand,
-          type: 'createShape',
-          input: payload.input,
-        }
-      : {
-          ...baseCommand,
-          type: 'createConnection',
-          input: payload.input,
-        }
+  let command: DiagramCommand
+  if (payload.type === 'createShape') {
+    command = { ...baseCommand, type: 'createShape', input: payload.input }
+  } else if (payload.type === 'createConnection') {
+    command = { ...baseCommand, type: 'createConnection', input: payload.input }
+  } else {
+    command = { ...baseCommand, type: 'clearDiagram' }
+  }
 
   const response: CreateDiagramCommandResponse = {
     command: addDiagramCommand(command),
@@ -72,12 +78,20 @@ function isCreateDiagramCommandRequest(
 
   const maybeRequest = value as Partial<CreateDiagramCommandRequest>
 
+  if (maybeRequest.diagramId !== undefined && typeof maybeRequest.diagramId !== 'string') {
+    return false
+  }
+
   if (maybeRequest.type === 'createShape') {
     return isCreateShapeInput(maybeRequest.input)
   }
 
   if (maybeRequest.type === 'createConnection') {
     return isCreateConnectionInput(maybeRequest.input)
+  }
+
+  if (maybeRequest.type === 'clearDiagram') {
+    return true
   }
 
   return false

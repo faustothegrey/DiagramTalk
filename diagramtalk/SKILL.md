@@ -77,8 +77,13 @@ python3 scripts/diagramtalk.py commands --status pending
 ```
 
 7. **Confirm with your eyes, not just the report.** Verify the diagram context
-   and saved snapshot, and look at a render of the result — geometric checks and
-   visual checks fail differently, so use both ([`PRINCIPLES.md`](PRINCIPLES.md)).
+   and saved snapshot, and render the result to an actual image so you can see
+   it — geometric checks and visual checks fail differently, so use both
+   ([`PRINCIPLES.md`](PRINCIPLES.md)):
+
+```bash
+python3 scripts/diagramtalk.py render --out /tmp/diagram.png
+```
 
 ## Readability & Layout
 
@@ -213,9 +218,31 @@ python3 scripts/diagramtalk.py rename <id> "New name"
 python3 scripts/diagramtalk.py delete <id>
 ```
 
+Clear the active diagram, or replace it in one shot from a spec:
+
+```bash
+python3 scripts/diagramtalk.py clear
+python3 scripts/diagramtalk.py layout spec.json --replace   # clear, then post the spec
+```
+
+Target a diagram other than the active one with `--diagram <id>` (on `shape`,
+`connect`, `clear`, `layout`, `render`). The open app tab auto-switches to that
+diagram to apply the edit and that diagram becomes active:
+
+```bash
+python3 scripts/diagramtalk.py layout spec.json --replace --diagram <id>
+```
+
+Render the active diagram to an image (needs the app tab open):
+
+```bash
+python3 scripts/diagramtalk.py render --out /tmp/diagram.png          # png
+python3 scripts/diagramtalk.py render --format svg --out /tmp/diagram.svg
+```
+
 ## Important Constraints
 
-- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw.
+- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`: with no app tab open the render request stays unfulfilled and the CLI times out.
 - Server command queue state is in memory and resets on Next.js restart.
 - Diagrams persist locally, one file per diagram in `.diagramtalk/diagrams/<id>.json`, with the active pointer in `.diagramtalk/index.json`. Only the active diagram is loaded in the editor and acted on by commands.
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.

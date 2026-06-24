@@ -54,6 +54,10 @@ type DiagramCommandBase = {
   createdAt: string
   appliedAt?: string
   error?: string
+  // The diagram this command targets. When omitted the command applies to the
+  // active diagram (legacy behavior); when set, the browser bridge switches to
+  // that diagram to apply it (auto-activate).
+  diagramId?: string
 }
 
 export type CreateShapeCommand = DiagramCommandBase & {
@@ -66,7 +70,14 @@ export type CreateConnectionCommand = DiagramCommandBase & {
   input: CreateConnectionInput
 }
 
-export type DiagramCommand = CreateShapeCommand | CreateConnectionCommand
+export type ClearDiagramCommand = DiagramCommandBase & {
+  type: 'clearDiagram'
+}
+
+export type DiagramCommand =
+  | CreateShapeCommand
+  | CreateConnectionCommand
+  | ClearDiagramCommand
 
 export type GetDiagramContextResponse = {
   context: DiagramContext | null
@@ -82,14 +93,22 @@ export type PublishDiagramContextResponse = {
   updatedAt: string
 }
 
+// Every command request may carry an optional `diagramId` to target a specific
+// diagram instead of the active one.
 export type CreateDiagramCommandRequest =
   | {
       type: 'createShape'
       input: CreateShapeInput
+      diagramId?: string
     }
   | {
       type: 'createConnection'
       input: CreateConnectionInput
+      diagramId?: string
+    }
+  | {
+      type: 'clearDiagram'
+      diagramId?: string
     }
 
 export type CreateDiagramCommandResponse = {
@@ -139,6 +158,41 @@ export type PublishDiagramSnapshotRequest = {
 export type PublishDiagramSnapshotResponse = {
   ok: true
   updatedAt: string
+}
+
+export type RenderFormat = 'png' | 'svg'
+
+export type RequestRenderRequest = {
+  id?: string
+  format?: RenderFormat
+}
+
+export type RequestRenderResponse = {
+  id: string
+  format: RenderFormat
+  requestedAt: string
+}
+
+export type UploadRenderRequest = {
+  id: string
+  format: RenderFormat
+  data: string
+}
+
+export type UploadRenderResponse = {
+  ok: true
+  renderedAt: string
+}
+
+export type RenderMetaResponse = {
+  id: string
+  format: RenderFormat | null
+  renderedAt: string | null
+  request: {
+    id: string
+    format: RenderFormat
+    requestedAt: string
+  } | null
 }
 
 export type DiagramSummary = {

@@ -23,6 +23,8 @@ import type {
   CreateShapeCommand,
   DiagramCommand,
   ListDiagramCommandsResponse,
+  RenderFormat,
+  RenderMetaResponse,
 } from '@/lib/diagramApiTypes'
 import type { DiagramContext } from '@/lib/types'
 
@@ -31,16 +33,31 @@ type DiagramApiBridgeProps = {
   onDiagramChange: (diagram: DiagramContext) => void
   diagramName: string | null
   diagramId: string | null
+  // Called when a queued command targets a different diagram, so the workspace
+  // can switch to it (auto-activate) before the command is applied.
+  onRequestActivate: (diagramId: string) => void
 }
 
 const POLL_INTERVAL_MS = 1500
 const PUBLISH_DEBOUNCE_MS = 300
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 800
+const RENDER_POLL_INTERVAL_MS = 1000
 
-export function DiagramApiBridge({ editor, onDiagramChange, diagramName, diagramId }: DiagramApiBridgeProps) {
+export function DiagramApiBridge({
+  editor,
+  onDiagramChange,
+  diagramName,
+  diagramId,
+  onRequestActivate,
+}: DiagramApiBridgeProps) {
   const publishTimerRef = useRef<number | null>(null)
   const snapshotTimerRef = useRef<number | null>(null)
   const processingCommandIdsRef = useRef(new Set<string>())
+  const isRenderingRef = useRef(false)
+  const lastRenderRequestRef = useRef<string | null>(null)
+  // Guards against re-requesting a switch many times before React state catches
+  // up: we ask the workspace to activate a target diagram at most once.
+  const requestedActivationRef = useRef<string | null>(null)
 
   const publishContext = useCallback((context: DiagramContext) => {
     if (publishTimerRef.current) {
@@ -130,6 +147,17 @@ export function DiagramApiBridge({ editor, onDiagramChange, diagramName, diagram
           if (isDisposed) return
           if (processingCommandIdsRef.current.has(command.id)) continue
 
+          // Auto-activate: a command targeting another diagram is left pending
+          // and the workspace is asked to switch to it (once); once that diagram
+          // is loaded, its bridge applies the command.
+          if (command.diagramId && command.diagramId !== diagramId) {
+            if (requestedActivationRef.current === null) {
+              requestedActivationRef.current = command.diagramId
+              onRequestActivate(command.diagramId)
+            }
+            continue
+          }
+
           processingCommandIdsRef.current.add(command.id)
 
           void applyAndReportCommand(editor, command)
@@ -152,7 +180,64 @@ export function DiagramApiBridge({ editor, onDiagramChange, diagramName, diagram
       isDisposed = true
       window.clearInterval(intervalId)
     }
-  }, [editor, handleDiagramChange])
+  }, [diagramId, editor, handleDiagramChange, onRequestActivate])
+
+  // Fulfill render requests: when the server reports a pending render request
+  // for this (active) diagram, export the current page and upload the result.
+  useEffect(() => {
+    if (!diagramId) return
+
+    let isDisposed = false
+
+    async function pollRenderRequest() {
+      if (isRenderingRef.current) return
+
+      try {
+        const response = await fetch(`/api/diagram/render?id=${diagramId}&meta=1`)
+        if (!response.ok) return
+
+        const meta = (await response.json()) as RenderMetaResponse
+        const renderRequest = meta.request
+
+        if (!renderRequest || lastRenderRequestRef.current === renderRequest.requestedAt) {
+          return
+        }
+
+        // The render targets another diagram — switch to it (once) so its bridge renders.
+        if (renderRequest.id !== diagramId) {
+          if (requestedActivationRef.current === null) {
+            requestedActivationRef.current = renderRequest.id
+            onRequestActivate(renderRequest.id)
+          }
+          return
+        }
+
+        isRenderingRef.current = true
+        try {
+          const data = await exportCurrentPage(editor, renderRequest.format)
+          await fetch('/api/diagram/render', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: diagramId, format: renderRequest.format, data }),
+          })
+          lastRenderRequestRef.current = renderRequest.requestedAt
+        } finally {
+          isRenderingRef.current = false
+        }
+      } catch (error) {
+        if (!isDisposed) {
+          console.error('[DiagramApiBridge] Failed to fulfill render request.', error)
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(pollRenderRequest, RENDER_POLL_INTERVAL_MS)
+
+    return () => {
+      isDisposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [diagramId, editor, onRequestActivate])
 
   return null
 }
@@ -175,7 +260,19 @@ function applyDiagramCommand(editor: Editor, command: DiagramCommand) {
     return
   }
 
+  if (command.type === 'clearDiagram') {
+    applyClearDiagramCommand(editor)
+    return
+  }
+
   applyCreateConnectionCommand(editor, command)
+}
+
+function applyClearDiagramCommand(editor: Editor) {
+  const ids = [...editor.getCurrentPageShapeIds()]
+  if (ids.length > 0) {
+    editor.deleteShapes(ids)
+  }
 }
 
 function applyCreateShapeCommand(editor: Editor, command: CreateShapeCommand) {
@@ -346,6 +443,33 @@ function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionC
   editor.createShape(arrow)
   editor.createBindings(bindings)
   editor.select(arrowId)
+}
+
+async function exportCurrentPage(editor: Editor, format: RenderFormat): Promise<string> {
+  const shapeIds = [...editor.getCurrentPageShapeIds()]
+  const options = { background: true, darkMode: false, scale: 1 }
+
+  if (format === 'svg') {
+    const svgEditor = editor as Editor & {
+      getSvgString(ids: TLShapeId[], opts: typeof options): Promise<{ svg: string } | null>
+    }
+    const result = await svgEditor.getSvgString(shapeIds, options)
+    return result?.svg ?? ''
+  }
+
+  const image = await editor.toImage(shapeIds, { ...options, format: 'png' })
+  const buffer = await image.blob.arrayBuffer()
+  return arrayBufferToBase64(buffer)
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
 }
 
 async function reportCommandResult(

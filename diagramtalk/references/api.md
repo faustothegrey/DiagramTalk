@@ -137,6 +137,35 @@ Optional connection fields:
   center-to-center routing). Choosing sides keeps arrows out of box interiors.
 - `color`: same palette as shapes.
 
+Clear the active diagram:
+
+```json
+{
+  "type": "clearDiagram"
+}
+```
+
+Deletes every shape on the active diagram's page. Like other commands it is
+queued and applied by the browser bridge, so it runs in order relative to any
+`createShape`/`createConnection` commands queued after it (post `clearDiagram`
+first to replace the canvas rather than merge onto it).
+
+**Targeting a specific diagram.** Any command may include an optional
+`diagramId` (validated to exist, else `404`) to act on a diagram other than the
+active one:
+
+```json
+{ "type": "createShape", "diagramId": "<id>", "input": { /* ... */ } }
+```
+
+When omitted the command applies to the active diagram (legacy behavior). When
+set, the open app tab **auto-activates** that diagram — it switches to it,
+applies the command, and saves — so edits land on the right diagram without a
+separate `use` call. (tldraw runs only in the browser, so this still needs an
+app tab open; the targeted diagram becomes the active one afterward.) The CLI
+exposes this as `--diagram <id>` on `shape`, `connect`, `clear`, `layout`, and
+`render`.
+
 ### `GET /api/diagram/commands`
 
 Lists queued commands and statuses.
@@ -162,6 +191,28 @@ Asks the LLM about the latest server-known diagram context.
   "question": "What does this diagram describe?"
 }
 ```
+
+### Render endpoints (`/api/diagram/render`)
+
+Rendering is pull-based: only the browser bridge can rasterize tldraw, so a
+caller requests a render, the active diagram's bridge exports the page and
+uploads it, and the result is cached per diagram id. Use the
+`diagramtalk.py render` CLI which wraps the whole flow.
+
+- `POST /api/diagram/render` — request a fresh render. Body `{ "id"?: string,
+  "format"?: "png" | "svg" }` (`id` defaults to the active diagram, `format`
+  defaults to `png`). Returns `{ id, format, requestedAt }` (202).
+- `GET /api/diagram/render?id=<id>&meta=1` — render metadata:
+  `{ id, format, renderedAt, request }`. Poll until `renderedAt >= requestedAt`
+  to know a fresh render is ready.
+- `GET /api/diagram/render?id=<id>` — the cached render **bytes**
+  (`Content-Type: image/png` or `image/svg+xml`, plus an `X-Rendered-At`
+  header). `404` until a render exists.
+- `PUT /api/diagram/render` — used by the bridge to upload a result. Body
+  `{ id, format, data }` (`data` is base64 for png, raw markup for svg).
+
+Renders need the app tab open; with no tab the request stays unfulfilled and
+`render` times out.
 
 ## Practical Notes
 

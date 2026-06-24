@@ -70,6 +70,31 @@ def request(method, path, body=None):
         raise SystemExit(f"Could not reach DiagramTalk: {error}") from error
 
 
+def request_raw(method, path):
+    """Like request(), but returns the raw response bytes (for binary renders)."""
+    base_url = os.environ.get("DIAGRAMTALK_URL", DEFAULT_BASE_URL).rstrip("/")
+    req = urllib.request.Request(f"{base_url}{path}", method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.read(), response.headers.get("Content-Type", "")
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8")
+        raise SystemExit(f"HTTP {error.code}: {detail}") from error
+    except urllib.error.URLError as error:
+        raise SystemExit(f"Could not reach DiagramTalk: {error}") from error
+
+
+def with_diagram(payload, diagram_id):
+    """Attach an optional target diagramId to a command payload.
+
+    Without it a command applies to the active diagram (legacy behavior); with
+    it the browser bridge auto-switches to that diagram to apply the command.
+    """
+    if diagram_id:
+        payload["diagramId"] = diagram_id
+    return payload
+
+
 def print_json(value):
     try:
         print(json.dumps(value, indent=2, sort_keys=True))
@@ -152,6 +177,58 @@ def cmd_commands(args):
     print_json(request("GET", path))
 
 
+def cmd_clear(args):
+    # Queues a clearDiagram command; the browser bridge deletes every shape on
+    # the target diagram's page (active when --diagram is omitted).
+    print_json(
+        request(
+            "POST",
+            "/api/diagram/commands",
+            with_diagram({"type": "clearDiagram"}, args.diagram),
+        )
+    )
+
+
+def cmd_render(args):
+    # Rendering is pull-based: ask the server to request a fresh render, wait for
+    # the browser bridge to export and upload it, then download the bytes. The app
+    # tab must be open for the bridge to fulfill the request.
+    fmt = args.format
+    render_body = {"format": fmt}
+    if args.diagram:
+        render_body["id"] = args.diagram
+    requested = request("POST", "/api/diagram/render", render_body)
+    diagram_id = requested["id"]
+    requested_at = requested["requestedAt"]
+
+    deadline = time.time() + args.timeout
+    rendered_at = None
+    while True:
+        meta = request("GET", f"/api/diagram/render?id={diagram_id}&meta=1")
+        rendered_at = meta.get("renderedAt")
+        if rendered_at and rendered_at >= requested_at and meta.get("format") == fmt:
+            break
+        if time.time() >= deadline:
+            raise SystemExit(
+                "Render timed out. Is the DiagramTalk app tab open so the bridge can render?"
+            )
+        time.sleep(args.interval)
+
+    data, _content_type = request_raw("GET", f"/api/diagram/render?id={diagram_id}")
+    out = args.out or f"diagram.{fmt}"
+    with open(out, "wb") as handle:
+        handle.write(data)
+
+    print_json({
+        "ok": True,
+        "out": out,
+        "bytes": len(data),
+        "format": fmt,
+        "id": diagram_id,
+        "renderedAt": rendered_at,
+    })
+
+
 def build_shape_payload(
     shape_id, shape_type, label, x, y, w=None, h=None, color=None, fill=None
 ):
@@ -186,7 +263,7 @@ def cmd_shape(args):
         request(
             "POST",
             "/api/diagram/commands",
-            {"type": "createShape", "input": input_payload},
+            with_diagram({"type": "createShape", "input": input_payload}, args.diagram),
         )
     )
 
@@ -211,7 +288,7 @@ def cmd_connect(args):
         request(
             "POST",
             "/api/diagram/commands",
-            {"type": "createConnection", "input": input_payload},
+            with_diagram({"type": "createConnection", "input": input_payload}, args.diagram),
         )
     )
 
@@ -467,7 +544,8 @@ def cmd_layout(args):
     overlaps = find_overlaps(shapes)
     arrow_crossings = find_arrow_crossings(shapes, edges)
 
-    if args.dry_run or not args.post:
+    should_post = args.post or getattr(args, "replace", False)
+    if args.dry_run or not should_post:
         report = {
             "shapes": [
                 {
@@ -507,6 +585,17 @@ def cmd_layout(args):
             raise SystemExit(1)
         return
 
+    # --replace clears the active diagram first so the spec replaces the canvas
+    # instead of merging onto existing shapes. The clear is queued ahead of the
+    # shapes, and the bridge applies queued commands in order.
+    target = getattr(args, "diagram", None)
+    if getattr(args, "replace", False):
+        request(
+            "POST",
+            "/api/diagram/commands",
+            with_diagram({"type": "clearDiagram"}, target),
+        )
+
     # Post all shapes first, then edges (edges fail if endpoints are missing).
     results = {"shapes": [], "edges": []}
     for s in shapes:
@@ -515,7 +604,11 @@ def cmd_layout(args):
             round(s["_w"]), round(s["_h"]), s.get("color"), s.get("fill"),
         )
         results["shapes"].append(
-            request("POST", "/api/diagram/commands", {"type": "createShape", "input": payload})
+            request(
+                "POST",
+                "/api/diagram/commands",
+                with_diagram({"type": "createShape", "input": payload}, target),
+            )
         )
     for e in edges:
         payload = {
@@ -533,9 +626,17 @@ def cmd_layout(args):
         if e.get("color"):
             payload["color"] = e["color"]
         results["edges"].append(
-            request("POST", "/api/diagram/commands", {"type": "createConnection", "input": payload})
+            request(
+                "POST",
+                "/api/diagram/commands",
+                with_diagram({"type": "createConnection", "input": payload}, target),
+            )
         )
-    print_json({"ok": True, "posted": {"shapes": len(shapes), "edges": len(edges)}})
+    print_json({
+        "ok": True,
+        "replaced": getattr(args, "replace", False),
+        "posted": {"shapes": len(shapes), "edges": len(edges)},
+    })
 
 
 def build_parser():
@@ -578,6 +679,23 @@ def build_parser():
     commands.add_argument("--status", choices=["pending", "applied", "failed"])
     commands.set_defaults(func=cmd_commands)
 
+    clear = subparsers.add_parser(
+        "clear", help="Delete every shape on the active (or --diagram) diagram (queued command)."
+    )
+    clear.add_argument("--diagram", help="Target diagram id (default: active).")
+    clear.set_defaults(func=cmd_clear)
+
+    render = subparsers.add_parser(
+        "render",
+        help="Render a diagram to an image file (requires the app tab open).",
+    )
+    render.add_argument("--format", choices=["png", "svg"], default="png")
+    render.add_argument("--out", help="Output file path (default: diagram.<format>).")
+    render.add_argument("--diagram", help="Target diagram id (default: active).")
+    render.add_argument("--timeout", type=float, default=30)
+    render.add_argument("--interval", type=float, default=1)
+    render.set_defaults(func=cmd_render)
+
     shape = subparsers.add_parser(
         "shape", help="Queue a createShape command (auto-sizes to the label when --w/--h omitted)."
     )
@@ -590,6 +708,7 @@ def build_parser():
     shape.add_argument("--h", type=float)
     shape.add_argument("--color", choices=SHAPE_COLORS)
     shape.add_argument("--fill", choices=SHAPE_FILLS)
+    shape.add_argument("--diagram", help="Target diagram id (default: active).")
     shape.set_defaults(func=cmd_shape)
 
     connect = subparsers.add_parser("connect", help="Queue a createConnection command.")
@@ -601,6 +720,7 @@ def build_parser():
     connect.add_argument("--from-anchor", dest="from_anchor", choices=CONNECTION_ANCHORS)
     connect.add_argument("--to-anchor", dest="to_anchor", choices=CONNECTION_ANCHORS)
     connect.add_argument("--color", choices=SHAPE_COLORS)
+    connect.add_argument("--diagram", help="Target diagram id (default: active).")
     connect.set_defaults(func=cmd_connect)
 
     layout = subparsers.add_parser(
@@ -616,6 +736,11 @@ def build_parser():
         "--dry-run", action="store_true",
         help="Force preview only: print computed coordinates and an overlap report.",
     )
+    layout.add_argument(
+        "--replace", action="store_true",
+        help="Clear the target diagram before posting so the spec replaces it (implies --post).",
+    )
+    layout.add_argument("--diagram", help="Target diagram id (default: active).")
     layout.set_defaults(func=cmd_layout)
 
     ask = subparsers.add_parser("ask", help="Ask about the latest diagram context.")

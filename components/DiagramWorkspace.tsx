@@ -269,12 +269,17 @@ export function DiagramWorkspace() {
       setIsBusy(true)
       try {
         await flushActiveSnapshot()
-        const payload = (await fetch(`/api/diagrams/${id}`, {
+        const response = await fetch(`/api/diagrams/${id}`, {
           method: 'PATCH',
           headers: JSON_HEADERS,
           body: JSON.stringify({ active: true }),
-        }).then((response) => response.json())) as DiagramRecordResponse
+        })
 
+        if (!response.ok) {
+          throw new Error(`Switch failed with ${response.status}.`)
+        }
+
+        const payload = (await response.json()) as DiagramRecordResponse
         loadRecord(payload.diagram, payload.activeId)
         await refreshList()
       } catch (error) {
@@ -374,6 +379,7 @@ export function DiagramWorkspace() {
               diagramName={diagramName}
               onDiagramChange={handleDiagramChange}
               onEditorReady={setEditor}
+              onRequestActivate={handleSelectDiagram}
             />
           </Tldraw>
         </div>
@@ -413,6 +419,7 @@ type DiagramContextTrackerProps = {
   onEditorReady: (editor: Editor) => void
   diagramName: string | null
   diagramId: string | null
+  onRequestActivate: (diagramId: string) => void
 }
 
 function DiagramContextTracker({
@@ -420,6 +427,7 @@ function DiagramContextTracker({
   onEditorReady,
   diagramName,
   diagramId,
+  onRequestActivate,
 }: DiagramContextTrackerProps) {
   const editor = useEditor()
 
@@ -433,6 +441,7 @@ function DiagramContextTracker({
       diagramName={diagramName}
       editor={editor}
       onDiagramChange={onDiagramChange}
+      onRequestActivate={onRequestActivate}
     />
   )
 }
