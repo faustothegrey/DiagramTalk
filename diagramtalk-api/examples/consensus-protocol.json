@@ -3,18 +3,25 @@
     "originX": 80,
     "originY": 120,
     "colGap": 90,
-    "rowPitch": 190,
-    "annotationGap": 70
+    "rowPitch": 230,
+    "annotationGap": 80
   },
   "lanes": [
+    {
+      "id": "title",
+      "type": "text",
+      "nodes": [
+        { "id": "agt-title", "label": "AgentTalk Consensus Protocol" }
+      ]
+    },
     {
       "id": "actors",
       "type": "ellipse",
       "nodes": [
         { "id": "agt-user", "label": "User / UI" },
-        { "id": "agt-orchestrator", "label": "Orchestrator" },
-        { "id": "agt-planner-a", "label": "Planner A (initiator)" },
-        { "id": "agt-planner-b", "label": "Planner B (peer)" },
+        { "id": "agt-orchestrator", "label": "Orchestrator\n(TeamCoordinator)" },
+        { "id": "agt-planner-a", "label": "Planner A\n(initiator)" },
+        { "id": "agt-planner-b", "label": "Planner B\n(peer)" },
         { "id": "agt-worker", "label": "Worker" }
       ]
     },
@@ -23,44 +30,67 @@
       "type": "box",
       "grid": true,
       "nodes": [
+        { "id": "agt-task", "label": "Task\nCreation" },
         { "id": "agt-ack", "label": "Ack" },
-        { "id": "agt-facts", "label": "Fact Collect" },
+        { "id": "agt-facts", "label": "Fact\nCollect" },
         { "id": "agt-discussion", "label": "Discussion" },
         { "id": "agt-proposal", "label": "Proposal" },
-        { "id": "agt-endorsement", "label": "Endorsement" },
-        { "id": "agt-submittal", "label": "Submittal" },
-        { "id": "agt-confirm", "label": "User Confirm" },
-        { "id": "agt-delegate", "label": "Delegate" },
-        { "id": "agt-complete", "label": "Work Done" }
+        { "id": "agt-endorsement", "label": "Endorsement\n(peer accepts)" },
+        { "id": "agt-submittal", "label": "Submittal\n(non-endorser)" },
+        { "id": "agt-confirm", "label": "User\nConfirm" },
+        { "id": "agt-delegate", "label": "Worker\nAssigned" },
+        { "id": "agt-complete", "label": "Work\nCompleted" }
       ]
     },
     {
-      "id": "branches",
+      "id": "branch",
       "type": "box",
       "nodes": [
-        { "id": "agt-interrupted", "label": "Interrupted", "col": 3 },
-        { "id": "agt-reject", "label": "Reject → re-plan", "col": 6 }
+        { "id": "agt-interrupted", "label": "Interrupted\n(terminal error)", "col": 4 }
+      ]
+    },
+    {
+      "id": "errornotes",
+      "type": "box",
+      "nodes": [
+        { "id": "agt-violation", "label": "Violation\nUnexpected message that is not a valid regression interrupts immediately." },
+        { "id": "agt-regression", "label": "Regression\nLower-ranked message asks for confirmation. 2 retries, then interrupt." },
+        { "id": "agt-fallback", "label": "Fallback\nOpinion instead of acceptance returns to Discussion. Allowed 2 times." },
+        { "id": "agt-reject", "label": "User Reject\nPlan cleared, feedback sent, planning loop resumes." },
+        { "id": "agt-timers", "label": "Timers\nFact collection 480s (Gemini 720s). Planning watchdog 900s. Submit urgency 120s x2. Agreement compliance 60s x2. Shutdown grace 60s." },
+        { "id": "agt-refuse", "label": "Worker Refuse\nTask becomes refused / error." }
+      ]
+    },
+    {
+      "id": "rules",
+      "type": "box",
+      "nodes": [
+        { "id": "agt-rule-initiator", "label": "Asymmetry rule\nFirst planner is initiator; peer waits and responds." },
+        { "id": "agt-rule-endorser", "label": "Two-person check\nEndorser cannot submit; the other planner submits the plan." },
+        { "id": "agt-save-marker", "type": "text", "label": "saved AgentTalk diagram" }
       ]
     }
   ],
-  "annotations": [
-    { "id": "agt-rule-initiator", "label": "Rule: initiator leads, peer responds" },
-    { "id": "agt-rule-endorser", "label": "Rule: endorser ≠ submitter" },
-    { "id": "agt-regression", "label": "Regression: rank drops → confirm (max 2)" },
-    { "id": "agt-violation", "label": "Violation → interrupt" },
-    { "id": "agt-fallback", "label": "Fallback to discussion (max 2)" },
-    { "id": "agt-timers", "label": "Timers: facts 480s, watchdog 900s, urgency 120s" }
-  ],
   "edges": [
-    { "id": "agt-e-ack-facts", "from": "agt-ack", "to": "agt-facts", "label": "both acked" },
-    { "id": "agt-e-facts-disc", "from": "agt-facts", "to": "agt-discussion", "label": "both facts in" },
-    { "id": "agt-e-disc-prop", "from": "agt-discussion", "to": "agt-proposal", "label": "propose" },
-    { "id": "agt-e-prop-endo", "from": "agt-proposal", "to": "agt-endorsement", "label": "request acceptance" },
-    { "id": "agt-e-endo-subm", "from": "agt-endorsement", "to": "agt-submittal", "label": "endorsed" },
-    { "id": "agt-e-subm-conf", "from": "agt-submittal", "to": "agt-confirm", "label": "awaiting confirm" },
-    { "id": "agt-e-conf-del", "from": "agt-confirm", "to": "agt-delegate", "label": "confirm" },
-    { "id": "agt-e-del-comp", "from": "agt-delegate", "to": "agt-complete", "label": "work assign" },
-    { "id": "agt-e-prop-int", "from": "agt-proposal", "to": "agt-interrupted", "label": "violation" },
-    { "id": "agt-e-conf-rej", "from": "agt-confirm", "to": "agt-reject", "label": "reject" }
+    { "id": "agt-c-user-task", "from": "agt-user", "to": "agt-task", "label": "creates task" },
+    { "id": "agt-c-orch-ack", "from": "agt-orchestrator", "to": "agt-ack", "label": "briefs planners" },
+    { "id": "agt-c-task-ack", "from": "agt-task", "to": "agt-ack", "label": "ack_planning_protocol" },
+    { "id": "agt-c-ack-facts", "from": "agt-ack", "to": "agt-facts", "label": "both acked" },
+    { "id": "agt-c-facts-discussion", "from": "agt-facts", "to": "agt-discussion", "label": "both summaries in" },
+    { "id": "agt-c-a-discuss", "from": "agt-planner-a", "to": "agt-discussion", "label": "opinion" },
+    { "id": "agt-c-b-discuss", "from": "agt-planner-b", "to": "agt-discussion", "label": "opinion" },
+    { "id": "agt-c-discussion-proposal", "from": "agt-discussion", "to": "agt-proposal", "label": "agreement_proposal" },
+    { "id": "agt-c-proposal-endorsement", "from": "agt-proposal", "to": "agt-endorsement", "label": "request acceptance" },
+    { "id": "agt-c-endorsement-submittal", "from": "agt-endorsement", "to": "agt-submittal", "label": "exact match accepted" },
+    { "id": "agt-c-submittal-confirm", "from": "agt-submittal", "to": "agt-confirm", "label": "implementation-ready plan" },
+    { "id": "agt-c-confirm-delegate", "from": "agt-confirm", "to": "agt-delegate", "label": "confirm" },
+    { "id": "agt-c-worker-delegate", "from": "agt-worker", "to": "agt-delegate", "label": "accepts work" },
+    { "id": "agt-c-delegate-complete", "from": "agt-delegate", "to": "agt-complete", "label": "submit_work_result" },
+    { "id": "agt-c-violation-interrupt", "from": "agt-violation", "to": "agt-interrupted", "label": "invalid message" },
+    { "id": "agt-c-regression-interrupt", "from": "agt-regression", "to": "agt-interrupted", "label": "confirmed regression" },
+    { "id": "agt-c-timers-interrupt", "from": "agt-timers", "to": "agt-interrupted", "label": "timeout" },
+    { "id": "agt-c-refuse-interrupt", "from": "agt-refuse", "to": "agt-interrupted", "label": "refused/error" },
+    { "id": "agt-c-fallback-discussion", "from": "agt-fallback", "to": "agt-discussion", "label": "fallback loop" },
+    { "id": "agt-c-reject-discussion", "from": "agt-reject", "to": "agt-discussion", "label": "reject loops back" }
   ]
 }
