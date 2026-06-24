@@ -29,13 +29,14 @@ import type { DiagramContext } from '@/lib/types'
 type DiagramApiBridgeProps = {
   editor: Editor
   onDiagramChange: (diagram: DiagramContext) => void
+  diagramName: string | null
 }
 
 const POLL_INTERVAL_MS = 1500
 const PUBLISH_DEBOUNCE_MS = 300
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 800
 
-export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgeProps) {
+export function DiagramApiBridge({ editor, onDiagramChange, diagramName }: DiagramApiBridgeProps) {
   const publishTimerRef = useRef<number | null>(null)
   const snapshotTimerRef = useRef<number | null>(null)
   const processingCommandIdsRef = useRef(new Set<string>())
@@ -81,12 +82,12 @@ export function DiagramApiBridge({ editor, onDiagramChange }: DiagramApiBridgePr
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ snapshot }),
+        body: JSON.stringify({ snapshot, name: diagramName?.trim() || null }),
       }).catch((error) => {
         console.error('[DiagramApiBridge] Failed to save diagram snapshot.', error)
       })
     }, SNAPSHOT_SAVE_DEBOUNCE_MS)
-  }, [editor])
+  }, [diagramName, editor])
 
   useReactor('publish diagram api context', handleDiagramChange, [handleDiagramChange])
   useReactor(

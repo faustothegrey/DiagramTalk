@@ -98,11 +98,13 @@ export type AskDiagramResponse = {
 
 export type GetDiagramSnapshotResponse = {
   snapshot: DiagramSnapshot | null
+  name: string | null
   updatedAt: string | null
 }
 
 export type PublishDiagramSnapshotRequest = {
-  snapshot: DiagramSnapshot
+  snapshot?: DiagramSnapshot
+  name?: string | null
 }
 
 export type PublishDiagramSnapshotResponse = {

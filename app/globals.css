@@ -65,9 +65,87 @@ textarea {
   height: 100%;
 }
 
+.diagramNameInput {
+  width: min(280px, 40vw);
+  min-width: 180px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--foreground);
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.diagramNameInput:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(15, 107, 95, 0.16);
+  outline-offset: 0;
+}
+
+.diagramNameInputPanel {
+  width: 100%;
+  min-width: 0;
+}
+
+.exportControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(31, 35, 40, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(31, 35, 40, 0.08);
+  pointer-events: auto;
+}
+
+.exportButton {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--foreground);
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exportButton:hover:not(:disabled) {
+  border-color: #b7c9c2;
+  background: #f8fbfa;
+}
+
+.exportButtonPrimary {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.exportButtonPrimary:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.exportButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.exportError {
+  margin: 0;
+  max-width: 220px;
+  padding: 6px 8px;
+  border: 1px solid #e1b5ad;
+  border-radius: 8px;
+  background: #fff0ee;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: auto;
+}
+
 .chatPanel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
   background: var(--panel);
@@ -90,6 +168,55 @@ textarea {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.tabStrip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 18px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.tabButton {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 10px 4px 12px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tabButton:hover {
+  color: var(--foreground);
+}
+
+.tabButtonActive {
+  border-bottom-color: var(--accent);
+  color: var(--foreground);
+}
+
+.commandsPanel {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.commandsGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.commandsLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .selectionSummary {

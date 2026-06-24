@@ -35,7 +35,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const updatedAt = await saveDiagramSnapshot(payload.snapshot)
+    const updatedAt = await saveDiagramSnapshot({
+      snapshot: payload.snapshot,
+      name: payload.name,
+    })
     const response: PublishDiagramSnapshotResponse = { ok: true, updatedAt }
 
     return Response.json(response)
@@ -52,8 +55,18 @@ function isPublishDiagramSnapshotRequest(
 
   const maybeRequest = value as Partial<PublishDiagramSnapshotRequest>
   const snapshot = maybeRequest.snapshot
+  const name = maybeRequest.name
 
-  if (!snapshot || typeof snapshot !== 'object') return false
+  const hasSnapshot = snapshot !== undefined
+  const hasName = name !== undefined
+
+  if (!hasSnapshot && !hasName) return false
+
+  if (hasSnapshot && (!snapshot || typeof snapshot !== 'object')) return false
+
+  if (hasName && name !== null && typeof name !== 'string') return false
+
+  if (!hasSnapshot) return true
 
   const maybeSnapshot = snapshot as Record<string, unknown>
 
