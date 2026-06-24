@@ -136,6 +136,13 @@ Optional connection fields:
   to — `top, bottom, left, right, center`. Defaults to `center` (legacy
   center-to-center routing). Choosing sides keeps arrows out of box interiors.
 - `color`: same palette as shapes.
+- `routing`: `straight` (default) or `orthogonal`. `orthogonal` renders a
+  tldraw **elbow** arrow (axis-aligned bends). The `layout` dry-run's
+  `arrowCrossings` check follows the *routed* (elbow) path for these edges, not
+  the straight segment, so checker and renderer agree. Note: orthogonal alone
+  does not dodge intermediate boxes — pair it with `fromAnchor`/`toAnchor` that
+  exit into the gaps (e.g. `bottom`→`bottom` to route below a row) and re-check
+  the dry-run until the crossing clears.
 
 Clear the active diagram:
 

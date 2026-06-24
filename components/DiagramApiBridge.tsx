@@ -411,6 +411,9 @@ function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionC
       arrowheadEnd: command.input.directional === false ? 'none' : 'arrow',
       richText: toRichText(command.input.label ?? ''),
       ...(command.input.color ? { color: command.input.color } : {}),
+      // 'orthogonal' uses tldraw's native elbow routing (axis-aligned bends);
+      // omitting kind keeps the default straight/arc arrow.
+      ...(command.input.routing === 'orthogonal' ? { kind: 'elbow' as const } : {}),
     },
   }
   const bindings: TLBindingCreate<TLArrowBinding>[] = [

@@ -148,11 +148,19 @@ Preview the computed geometry first. The dry-run runs two physical collision
 checks and reports both:
 
 - `overlaps` — boxes whose rectangles intersect (hard failure; exits non-zero).
-- `arrowCrossings` — arrows whose straight path slices through a box they are
-  not connected to (reported as warnings; line-segment vs. rectangle, so it
-  catches mid-path crossings that coordinate reading alone misses).
+- `arrowCrossings` — arrows whose path slices through a box they are not
+  connected to (reported as warnings; line-segment vs. rectangle, so it catches
+  mid-path crossings that coordinate reading alone misses). For an edge with
+  `routing: "orthogonal"` the check follows the routed elbow path, not the
+  straight segment.
 
 `ok` is true only when both are empty.
+
+To clear a crossing on a back-edge or long-range edge, set
+`routing: "orthogonal"` on it **and** pick `fromAnchor`/`toAnchor` that exit
+into the gaps (e.g. `bottom`→`bottom` to route below a row), then re-run the
+dry-run — orthogonal alone keeps the same lane and does not dodge intermediate
+boxes. On the bundled example this drops crossings from 5 to 1.
 
 ```bash
 python3 scripts/diagramtalk.py \
@@ -184,7 +192,7 @@ python3 scripts/diagramtalk.py shape \
 ```
 
 Create a connection (`--from-anchor`/`--to-anchor` pick which side the arrow
-attaches to; `--color` tints the arrow):
+attaches to; `--color` tints the arrow; `--routing orthogonal` draws an elbow):
 
 ```bash
 python3 scripts/diagramtalk.py connect \
@@ -192,7 +200,8 @@ python3 scripts/diagramtalk.py connect \
   --from shape:example-node \
   --to shape:other-node \
   --label "calls" \
-  --from-anchor right --to-anchor left
+  --from-anchor right --to-anchor left \
+  --routing straight
 ```
 
 Ask about the latest published diagram context:

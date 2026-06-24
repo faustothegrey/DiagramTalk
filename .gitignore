@@ -13,3 +13,7 @@ pnpm-debug.log*
 *.tsbuildinfo
 .diagramtalk/
 .claude/
+
+# Python
+__pycache__/
+*.pyc

@@ -283,6 +283,8 @@ def cmd_connect(args):
         input_payload["toAnchor"] = args.to_anchor
     if args.color:
         input_payload["color"] = args.color
+    if args.routing and args.routing != "straight":
+        input_payload["routing"] = args.routing
 
     print_json(
         request(
@@ -449,6 +451,7 @@ def compute_layout(spec):
             auto_from, auto_to = derive_anchors(src, dst)
             edge["_fromAnchor"] = edge.get("fromAnchor", auto_from)
             edge["_toAnchor"] = edge.get("toAnchor", auto_to)
+        edge["_routing"] = "orthogonal" if edge.get("routing") == "orthogonal" else "straight"
     return shapes, edges
 
 
@@ -510,10 +513,43 @@ def _segment_hits_rect(p1, p2, rect, pad=-1.0):
     return u1 <= u2
 
 
+def _axis_of(side):
+    """The exit/entry axis implied by an anchor side ('h', 'v', or None)."""
+    if side in ("left", "right"):
+        return "h"
+    if side in ("top", "bottom"):
+        return "v"
+    return None
+
+
+def _orthogonal_path(p1, p2, from_side, to_side):
+    """Approximate tldraw's elbow routing as an axis-aligned polyline that exits
+    p1 perpendicular to its anchor side and enters p2 perpendicular to its,
+    so the crossing check matches what an `orthogonal` arrow actually draws.
+
+    Returns a list of >= 2 points. Center/unknown anchors fall back to the
+    dominant axis of the connection."""
+    x1, y1 = p1
+    x2, y2 = p2
+    exit_axis = _axis_of(from_side) or ("h" if abs(x2 - x1) >= abs(y2 - y1) else "v")
+    entry_axis = _axis_of(to_side) or ("v" if exit_axis == "h" else "h")
+
+    if exit_axis == "h" and entry_axis == "v":
+        return [p1, (x2, y1), p2]
+    if exit_axis == "v" and entry_axis == "h":
+        return [p1, (x1, y2), p2]
+    if exit_axis == "h":  # both horizontal -> route through a mid x channel
+        mx = (x1 + x2) / 2
+        return [p1, (mx, y1), (mx, y2), p2]
+    my = (y1 + y2) / 2  # both vertical -> mid y channel
+    return [p1, (x1, my), (x2, my), p2]
+
+
 def find_arrow_crossings(shapes, edges):
-    """Report every arrow whose straight path passes through a box it is not
-    connected to. This is the physical check that coordinate-only box-overlap
-    detection misses."""
+    """Report every arrow whose path passes through a box it is not connected
+    to. This is the physical check that coordinate-only box-overlap detection
+    misses. 'orthogonal' edges are checked along their routed (elbow) path, not
+    the straight segment, so the checker and the renderer agree."""
     by_id = {s["id"]: s for s in shapes}
     crossings = []
     for edge in edges:
@@ -523,13 +559,20 @@ def find_arrow_crossings(shapes, edges):
             continue
         p1 = _anchor_point(src, edge.get("_fromAnchor"))
         p2 = _anchor_point(dst, edge.get("_toAnchor"))
+        if edge.get("_routing") == "orthogonal":
+            path = _orthogonal_path(p1, p2, edge.get("_fromAnchor"), edge.get("_toAnchor"))
+        else:
+            path = [p1, p2]
         hit = []
         for shape in shapes:
             if shape["id"] in (edge["from"], edge["to"]):
                 continue
             if shape["type"] == "text":
                 continue
-            if _segment_hits_rect(p1, p2, shape):
+            if any(
+                _segment_hits_rect(path[k], path[k + 1], shape)
+                for k in range(len(path) - 1)
+            ):
                 hit.append(shape["id"])
         if hit:
             crossings.append({"edge": edge.get("id") or f'{edge["from"]}->{edge["to"]}', "crosses": hit})
@@ -570,6 +613,7 @@ def cmd_layout(args):
                     "fromAnchor": e.get("_fromAnchor"),
                     "toAnchor": e.get("_toAnchor"),
                     "color": e.get("color"),
+                    "routing": e.get("_routing", "straight"),
                 }
                 for e in edges
             ],
@@ -579,8 +623,9 @@ def cmd_layout(args):
         }
         print_json(report)
         # Box overlaps are a hard failure (the engine guarantees against them).
-        # Arrow crossings are reported as warnings: until elbow routing exists
-        # some long-range edges can't avoid every box, so they don't fail here.
+        # Arrow crossings are reported as warnings: a straight edge may have to
+        # cross a box, but setting routing:"orthogonal" on it usually clears the
+        # crossing (the check above already follows the routed elbow path).
         if overlaps:
             raise SystemExit(1)
         return
@@ -625,6 +670,8 @@ def cmd_layout(args):
             payload["toAnchor"] = e["_toAnchor"]
         if e.get("color"):
             payload["color"] = e["color"]
+        if e.get("_routing") == "orthogonal":
+            payload["routing"] = "orthogonal"
         results["edges"].append(
             request(
                 "POST",
@@ -720,6 +767,10 @@ def build_parser():
     connect.add_argument("--from-anchor", dest="from_anchor", choices=CONNECTION_ANCHORS)
     connect.add_argument("--to-anchor", dest="to_anchor", choices=CONNECTION_ANCHORS)
     connect.add_argument("--color", choices=SHAPE_COLORS)
+    connect.add_argument(
+        "--routing", choices=["straight", "orthogonal"], default="straight",
+        help="'orthogonal' renders an elbow arrow that bends around boxes.",
+    )
     connect.add_argument("--diagram", help="Target diagram id (default: active).")
     connect.set_defaults(func=cmd_connect)
 

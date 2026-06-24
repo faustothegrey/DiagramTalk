@@ -21,6 +21,11 @@ export type ShapeFill = 'none' | 'semi' | 'solid' | 'pattern'
 
 export type ConnectionAnchor = 'top' | 'bottom' | 'left' | 'right' | 'center'
 
+// 'straight' (default) draws a direct anchor-to-anchor arrow; 'orthogonal'
+// renders a tldraw elbow arrow that bends in axis-aligned segments, which keeps
+// long-range / back edges out of intermediate boxes.
+export type ConnectionRouting = 'straight' | 'orthogonal'
+
 export type CreateShapeInput = {
   id?: string
   type: 'box' | 'ellipse' | 'text' | 'note'
@@ -44,6 +49,8 @@ export type CreateConnectionInput = {
   fromAnchor?: ConnectionAnchor
   toAnchor?: ConnectionAnchor
   color?: ShapeColor
+  // Defaults to 'straight'. 'orthogonal' renders an elbow arrow.
+  routing?: ConnectionRouting
 }
 
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'

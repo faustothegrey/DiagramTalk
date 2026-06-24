@@ -114,6 +114,7 @@ const SHAPE_COLORS = new Set([
 ])
 const SHAPE_FILLS = new Set(['none', 'semi', 'solid', 'pattern'])
 const CONNECTION_ANCHORS = new Set(['top', 'bottom', 'left', 'right', 'center'])
+const CONNECTION_ROUTINGS = new Set(['straight', 'orthogonal'])
 
 function isOptionalEnum(value: unknown, allowed: Set<string>) {
   return value === undefined || (typeof value === 'string' && allowed.has(value))
@@ -157,6 +158,7 @@ function isCreateConnectionInput(value: unknown) {
     (input.directional === undefined || typeof input.directional === 'boolean') &&
     isOptionalEnum(input.fromAnchor, CONNECTION_ANCHORS) &&
     isOptionalEnum(input.toAnchor, CONNECTION_ANCHORS) &&
-    isOptionalEnum(input.color, SHAPE_COLORS)
+    isOptionalEnum(input.color, SHAPE_COLORS) &&
+    isOptionalEnum(input.routing, CONNECTION_ROUTINGS)
   )
 }
