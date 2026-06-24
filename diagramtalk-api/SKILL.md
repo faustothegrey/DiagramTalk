@@ -1,9 +1,25 @@
 ---
 name: diagramtalk-api
-description: Interact with a local DiagramTalk whiteboard app through its HTTP API. Use when Codex or another agent needs to inspect the current diagram, add shapes or connections, ask the DiagramTalk LLM about the canvas, verify snapshot persistence, or generate diagrams programmatically in the running Next.js/tldraw app.
+description: Interact with a local DiagramTalk whiteboard app through its HTTP API, and generate readable diagrams whose layout is physically verified (no overlapping boxes, no arrows cutting through shapes) rather than guessed from coordinates. Use when Codex or another agent needs to inspect the current diagram, add shapes or connections, ask the DiagramTalk LLM about the canvas, verify snapshot persistence, or generate diagrams programmatically in the running Next.js/tldraw app.
 ---
 
 # DiagramTalk API
+
+## Core principle — coordinates are claims; geometry is truth
+
+**Verify geometry, don't infer it.** A diagram is correct only when you have
+*computed* that its elements don't physically collide — boxes against boxes, and
+every arrow's whole path against every box — and have *looked at a render*.
+Coordinates that "look fine" are not evidence: an `(x, y)` is an anchor, not a
+footprint, and an arrow collides everywhere between its endpoints, not just at
+them.
+
+This is the linchpin of the skill. Auto-sizing, lanes, anchors, and colors all
+exist to produce a diagram that **passes a physical check** — never one that
+merely has tidy numbers. A diagram is not "done" until `layout … --dry-run`
+shows empty `overlaps`, every remaining `arrowCrossing` is acknowledged (not
+silently shipped), and you have seen a render. Full statement and corollaries:
+[`PRINCIPLES.md`](PRINCIPLES.md).
 
 ## Overview
 
@@ -40,13 +56,20 @@ python3 scripts/diagramtalk.py context
    instead of placing shapes by hand (see "Readability & Layout" below). Use
    `shape`/`connect` only for small edits.
 
-4. Wait for the browser bridge to apply commands:
+4. **Verify the geometry before posting (the core gate).** Run the spec through
+   `layout … --dry-run` and read the physical collision report. Do not post
+   until `overlaps` is empty and every `arrowCrossing` is either gone or
+   consciously accepted. See "Readability & Layout" for the report format.
+
+5. Post (`layout … --post`) and wait for the browser bridge to apply commands:
 
 ```bash
 python3 scripts/diagramtalk.py commands --status pending
 ```
 
-5. Verify the diagram context and saved snapshot.
+6. **Confirm with your eyes, not just the report.** Verify the diagram context
+   and saved snapshot, and look at a render of the result — geometric checks and
+   visual checks fail differently, so use both ([`PRINCIPLES.md`](PRINCIPLES.md)).
 
 ## Readability & Layout
 
@@ -184,6 +207,8 @@ python3 scripts/diagramtalk.py snapshot
 
 For endpoint details and payload shapes, read:
 
+- [`PRINCIPLES.md`](PRINCIPLES.md) — the core principle this skill is built on;
+  read first
 - `references/api.md`
 - `examples/consensus-protocol.json` — a full layout spec example
 - `LIMITATIONS.md` — readability issues that the skill cannot fix on its own
