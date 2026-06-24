@@ -1,64 +1,94 @@
-# Skill Limitations (readability)
+# Skill Limitations & Roadmap (readability)
 
 The skill controls **what commands are sent** (shape types, labels, coordinates,
-sizes). It does **not** control **how the app renders them** — that is decided by
-the browser bridge (`components/DiagramApiBridge.tsx`) and the command schema
-(`lib/diagramApiTypes.ts`). The items below are real readability problems that
-cannot be fully fixed from inside `diagramtalk-api/` alone. They are recorded
-here for a later pass that touches the app.
+sizes, and now colors/anchors). It does **not** control the parts of rendering
+that have no field in the command schema. This file tracks what has been fixed
+in the app bridge and what is still open.
 
-## 1. `note` shapes have a fixed, oversized footprint
+- Bridge: `components/DiagramApiBridge.tsx`
+- Command schema: `lib/diagramApiTypes.ts` + `app/api/diagram/commands/route.ts`
 
-- **Symptom:** Yellow notes are large (~200×200) and ignore any `w/h`, so they
-  overlap nearby shapes and arrows. This was the dominant overlap in the first
-  rendering.
-- **Why the skill can't fix it:** `toCreateShapePartial` in the bridge only sets
-  `richText` for `note` shapes — it drops `w/h`. tldraw then uses its default
-  note size.
-- **Skill workaround in place:** the layout engine renders annotations as
-  **sized `box` shapes** in a reserved band, not as notes.
-- **Real fix (app):** pass `w/h` (and `scale`/`growY`) through for notes, or add
-  a dedicated "sticky/annotation" sizing path.
+---
 
-## 2. Box/ellipse text does not auto-grow to fit
+## Resolved in the bridge — option A
 
-- **Symptom:** If a label is longer than the box, text overflows below/outside
-  the shape and reads poorly.
-- **Why the skill can't fully fix it:** the skill can *estimate* a fitting size
-  (it now does, via `estimate_label_size`), but the estimate is heuristic. tldraw
-  geo shapes do not vertically grow to contain wrapped text unless `growY` is set.
-- **Real fix (app):** set `growY` on geo shapes and/or a sane `verticalAlign`,
-  and consider exposing font `size` (`s|m|l|xl`) in the command schema.
+### A1. Color / fill (was: "the original colors were lost")
 
-## 3. Arrows route as straight diagonals
+**What you saw.** After the readability pass the yellow notes turned into plain
+boxes. Here is exactly why: the original yellow came **entirely from `note`
+shapes** — tldraw renders notes yellow by default; nobody ever set a color. The
+readability pass swapped every annotation from `note` → `box`, because the bridge
+**dropped `w/h` for notes** and that fixed ~200px note footprint was the *main*
+overlap you first complained about. A `box` can be sized; a `note` cannot. But a
+`box` rendered with no fill, so the yellow disappeared. It was a **trade: color
+spent to buy size/overlap control**, and with no `color` field in the schema the
+skill couldn't have both.
 
-- **Symptom:** Long edges cut straight across the canvas, crossing unrelated
-  shapes and labels.
-- **Why the skill can't fix it:** the bridge builds a single straight arrow
-  between shape centers with center-anchored bindings; there is no orthogonal
-  routing or obstacle avoidance, and the skill can't influence the binding
-  anchors.
-- **Skill mitigation:** the layout engine keeps connected nodes adjacent
-  (left-to-right spine, branches directly above/below), which shortens edges and
-  reduces crossings — but cannot eliminate them.
-- **Real fix (app):** elbow/orthogonal arrow routing, smarter anchor selection,
-  or per-edge anchor hints in the schema.
+**Fix.** `CreateShapeInput` now has `color` and `fill`; the bridge forwards them
+to geo/note/text shapes. `CreateConnectionInput` has `color` for arrows. The
+layout engine takes `color`/`fill` per lane or per node, so annotations can be
+sized **and** yellow (`"color": "yellow", "fill": "semi"`), and roles can be
+color-coded.
 
-## 4. No styling controls (color, font size, z-order)
+### A2. Arrow anchor sides (was: "arrows still cross boxes")
 
-- **Symptom:** Everything is the same color; can't visually separate actors vs.
-  states vs. annotations; can't push annotations behind the spine.
-- **Why the skill can't fix it:** the command schema accepts only
-  `type/label/x/y/w/h` for shapes — no `color`, `fill`, `font`, `size`, or
-  z-index.
-- **Real fix (app):** extend the createShape input + bridge to forward tldraw
-  style props (`color`, `fill`, `dash`, `size`, `font`) and ordering.
+**What you saw.** Arrows cut straight through boxes. Why: the bridge drew **every
+arrow as a straight line from shape-center to shape-center**, with both binding
+anchors pinned at the center. There was no orthogonal/elbow routing, no obstacle
+avoidance, and no way to pick which **side** of a box an arrow leaves or enters.
+So any edge whose endpoints aren't roughly adjacent cut straight across whatever
+sat between them.
 
-## 5. Text rendering in exported SVG uses `foreignObject`
+**Fix (partial).** `CreateConnectionInput` now takes `fromAnchor`/`toAnchor`
+(`top|bottom|left|right|center`); the bridge binds the arrow to that exact edge
+point (precise binding) instead of the center. The layout engine auto-assigns
+sides from geometry (horizontal edges leave the right / enter the left; vertical
+edges leave the bottom / enter the top), so arrows stay on box edges and out of
+interiors.
 
-- **Symptom:** Exported SVGs (e.g. `Senza titolo.svg`) carry text in
-  `<foreignObject>`, so some external SVG renderers (e.g. `rsvg-convert`) show
-  empty shapes. The app itself renders text correctly.
-- **Why the skill can't fix it:** export is handled in `lib/diagramExport.ts`,
-  not the skill.
-- **Real fix (app):** offer a native-`<text>` export mode for portability.
+**Still not solved here:** this picks *where arrows attach*, not *the path
+between*. Arrows are still straight segments, so a long edge can still pass over
+an unrelated box. See "Open — arrow routing" below.
+
+---
+
+## Still open (needs more bridge work)
+
+### Note shapes still have a fixed footprint
+`note` shapes still ignore `w/h`, which is why the skill uses sized `box` shapes
+for annotations. If we ever want true sticky-notes at a controlled size, the
+bridge must forward `w/h`/`scale`/`growY` for notes.
+
+### Box text does not auto-grow
+The skill *estimates* a fitting size, but tldraw geo shapes don't vertically grow
+to contain wrapped text unless `growY` is set. Long labels can still overflow.
+Fix: set `growY` (and a sane `verticalAlign`) on geo shapes; optionally expose
+font `size` (`s|m|l|xl`).
+
+### Arrow routing (the rest of A2)
+Anchor sides help, but there is still no elbow/orthogonal routing or obstacle
+avoidance — long edges remain straight diagonals. tldraw arrows are straight or
+curved (`bend`) only; real orthogonal routing would need either a custom arrow
+util or a routing pass that inserts waypoints.
+
+### SVG export uses `foreignObject`
+Exported SVGs carry text in `<foreignObject>`, so some external renderers show
+empty shapes (the app renders fine). Lives in `lib/diagramExport.ts`.
+
+---
+
+## B — deferred: skill-only placement pass
+
+Recorded for later, per our discussion. Independent of the bridge, the layout
+engine could **cut crossings through placement alone**:
+
+- Align each actor **directly above its spine target** (via `col`) so the
+  actor→spine arrows become short near-verticals instead of diagonals.
+- Cluster `Interrupted`'s four feeder-notes **right under it (centered)** so the
+  error-fan arrows become short verticals instead of long diagonals across the
+  band.
+- Order nodes within a lane to minimize edge crossings (barycenter heuristic).
+
+This **reduces** crossings; it cannot eliminate them, and it brings back **zero**
+color on its own. The durable result is **B (placement) + A2 (anchors/routing)
+together**: good positions, clean attachment, and — eventually — routed paths.

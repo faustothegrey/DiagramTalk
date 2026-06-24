@@ -2,6 +2,25 @@ import type { DiagramContext } from './types'
 
 export type DiagramSnapshot = unknown
 
+export type ShapeColor =
+  | 'black'
+  | 'grey'
+  | 'light-violet'
+  | 'violet'
+  | 'blue'
+  | 'light-blue'
+  | 'yellow'
+  | 'orange'
+  | 'green'
+  | 'light-green'
+  | 'light-red'
+  | 'red'
+  | 'white'
+
+export type ShapeFill = 'none' | 'semi' | 'solid' | 'pattern'
+
+export type ConnectionAnchor = 'top' | 'bottom' | 'left' | 'right' | 'center'
+
 export type CreateShapeInput = {
   id?: string
   type: 'box' | 'ellipse' | 'text' | 'note'
@@ -10,6 +29,8 @@ export type CreateShapeInput = {
   y: number
   w?: number
   h?: number
+  color?: ShapeColor
+  fill?: ShapeFill
 }
 
 export type CreateConnectionInput = {
@@ -18,6 +39,11 @@ export type CreateConnectionInput = {
   toShapeId: string
   label?: string
   directional?: boolean
+  // Which side of the source/target shape the arrow attaches to. Defaults to
+  // 'center' (legacy behavior). Picking sides keeps arrows out of box interiors.
+  fromAnchor?: ConnectionAnchor
+  toAnchor?: ConnectionAnchor
+  color?: ShapeColor
 }
 
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'

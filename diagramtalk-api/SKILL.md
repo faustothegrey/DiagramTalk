@@ -68,6 +68,19 @@ Avoid that — let the tooling handle geometry.
   (Do not use `note` shapes for this — see `LIMITATIONS.md`.)
 - **Align branches under their spine node** with `"col": <index>` (the index of
   the spine node in the grid lane).
+- **Color-code by role.** Set `color`/`fill` per lane (or per node to override)
+  so actors, happy-path states, error states, and annotations read as distinct
+  groups. Annotation boxes with `"color": "yellow", "fill": "semi"` recreate the
+  old sticky-note look while staying sized. Edges take an optional `color` too.
+- **Let arrows pick their sides automatically.** The engine assigns each edge an
+  exit/entry side from geometry (horizontal edges leave the right / enter the
+  left; vertical edges leave the bottom / enter the top) so arrows stay out of
+  box interiors. Override per edge with `"fromAnchor"`/`"toAnchor"`
+  (`top|bottom|left|right|center`) when you want a specific routing.
+
+Allowed `color`: `black, grey, light-violet, violet, blue, light-blue, yellow,
+orange, green, light-green, light-red, red, white`. Allowed `fill`: `none, semi,
+solid, pattern`.
 
 **Layout spec** (JSON). Lanes are drawn top-to-bottom; the lane marked
 `"grid": true` defines the column positions that other lanes align to via `col`.
@@ -76,16 +89,21 @@ Avoid that — let the tooling handle geometry.
 {
   "config": { "originX": 80, "originY": 120, "colGap": 90, "rowPitch": 190 },
   "lanes": [
-    { "id": "actors", "type": "ellipse",
+    { "id": "actors", "type": "ellipse", "color": "light-blue", "fill": "semi",
       "nodes": [ { "id": "user", "label": "User / UI" } ] },
-    { "id": "spine", "type": "box", "grid": true,
+    { "id": "spine", "type": "box", "grid": true, "color": "blue", "fill": "semi",
       "nodes": [ { "id": "ack", "label": "Ack" },
                  { "id": "facts", "label": "Fact Collect" } ] },
-    { "id": "branches", "type": "box",
+    { "id": "branches", "type": "box", "color": "red", "fill": "semi",
       "nodes": [ { "id": "interrupted", "label": "Interrupted", "col": 1 } ] }
   ],
-  "annotations": [ { "id": "timers", "label": "Timers: facts 480s, watchdog 900s" } ],
-  "edges": [ { "id": "e1", "from": "ack", "to": "facts", "label": "both acked" } ]
+  "annotations": [
+    { "id": "timers", "label": "Timers: facts 480s, watchdog 900s",
+      "color": "yellow", "fill": "semi" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "ack", "to": "facts", "label": "both acked" }
+  ]
 }
 ```
 
@@ -109,24 +127,28 @@ A complete, ready-to-run example for the AgentTalk consensus protocol is in
 
 ## Common Operations
 
-Create a shape (omit `--w/--h` to auto-size the box to its label):
+Create a shape (omit `--w/--h` to auto-size the box to its label; `--color`/
+`--fill` are optional):
 
 ```bash
 python3 scripts/diagramtalk.py shape \
   --id example-node \
   --type box \
   --label "Example Node" \
-  --x 100 --y 100
+  --x 100 --y 100 \
+  --color yellow --fill semi
 ```
 
-Create a connection:
+Create a connection (`--from-anchor`/`--to-anchor` pick which side the arrow
+attaches to; `--color` tints the arrow):
 
 ```bash
 python3 scripts/diagramtalk.py connect \
   --id example-edge \
   --from shape:example-node \
   --to shape:other-node \
-  --label "calls"
+  --label "calls" \
+  --from-anchor right --to-anchor left
 ```
 
 Ask about the latest published diagram context:

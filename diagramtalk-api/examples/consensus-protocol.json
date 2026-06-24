@@ -17,6 +17,8 @@
     {
       "id": "actors",
       "type": "ellipse",
+      "color": "light-blue",
+      "fill": "semi",
       "nodes": [
         { "id": "agt-user", "label": "User / UI" },
         { "id": "agt-orchestrator", "label": "Orchestrator\n(TeamCoordinator)" },
@@ -29,6 +31,8 @@
       "id": "spine",
       "type": "box",
       "grid": true,
+      "color": "blue",
+      "fill": "semi",
       "nodes": [
         { "id": "agt-task", "label": "Task\nCreation" },
         { "id": "agt-ack", "label": "Ack" },
@@ -45,6 +49,8 @@
     {
       "id": "branch",
       "type": "box",
+      "color": "red",
+      "fill": "semi",
       "nodes": [
         { "id": "agt-interrupted", "label": "Interrupted\n(terminal error)", "col": 4 }
       ]
@@ -52,6 +58,8 @@
     {
       "id": "errornotes",
       "type": "box",
+      "color": "yellow",
+      "fill": "semi",
       "nodes": [
         { "id": "agt-violation", "label": "Violation\nUnexpected message that is not a valid regression interrupts immediately." },
         { "id": "agt-regression", "label": "Regression\nLower-ranked message asks for confirmation. 2 retries, then interrupt." },
@@ -64,10 +72,12 @@
     {
       "id": "rules",
       "type": "box",
+      "color": "yellow",
+      "fill": "semi",
       "nodes": [
         { "id": "agt-rule-initiator", "label": "Asymmetry rule\nFirst planner is initiator; peer waits and responds." },
         { "id": "agt-rule-endorser", "label": "Two-person check\nEndorser cannot submit; the other planner submits the plan." },
-        { "id": "agt-save-marker", "type": "text", "label": "saved AgentTalk diagram" }
+        { "id": "agt-save-marker", "type": "text", "color": "grey", "label": "saved AgentTalk diagram" }
       ]
     }
   ],
@@ -86,11 +96,11 @@
     { "id": "agt-c-confirm-delegate", "from": "agt-confirm", "to": "agt-delegate", "label": "confirm" },
     { "id": "agt-c-worker-delegate", "from": "agt-worker", "to": "agt-delegate", "label": "accepts work" },
     { "id": "agt-c-delegate-complete", "from": "agt-delegate", "to": "agt-complete", "label": "submit_work_result" },
-    { "id": "agt-c-violation-interrupt", "from": "agt-violation", "to": "agt-interrupted", "label": "invalid message" },
-    { "id": "agt-c-regression-interrupt", "from": "agt-regression", "to": "agt-interrupted", "label": "confirmed regression" },
-    { "id": "agt-c-timers-interrupt", "from": "agt-timers", "to": "agt-interrupted", "label": "timeout" },
-    { "id": "agt-c-refuse-interrupt", "from": "agt-refuse", "to": "agt-interrupted", "label": "refused/error" },
-    { "id": "agt-c-fallback-discussion", "from": "agt-fallback", "to": "agt-discussion", "label": "fallback loop" },
-    { "id": "agt-c-reject-discussion", "from": "agt-reject", "to": "agt-discussion", "label": "reject loops back" }
+    { "id": "agt-c-violation-interrupt", "from": "agt-violation", "to": "agt-interrupted", "label": "invalid message", "color": "red" },
+    { "id": "agt-c-regression-interrupt", "from": "agt-regression", "to": "agt-interrupted", "label": "confirmed regression", "color": "red" },
+    { "id": "agt-c-timers-interrupt", "from": "agt-timers", "to": "agt-interrupted", "label": "timeout", "color": "red" },
+    { "id": "agt-c-refuse-interrupt", "from": "agt-refuse", "to": "agt-interrupted", "label": "refused/error", "color": "red" },
+    { "id": "agt-c-fallback-discussion", "from": "agt-fallback", "to": "agt-discussion", "label": "fallback loop", "color": "orange" },
+    { "id": "agt-c-reject-discussion", "from": "agt-reject", "to": "agt-discussion", "label": "reject loops back", "color": "orange" }
   ]
 }

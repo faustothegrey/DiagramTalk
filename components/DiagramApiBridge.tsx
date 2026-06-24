@@ -204,6 +204,8 @@ function toCreateShapePartial(
         w: width,
         h: height,
         richText: toRichText(label),
+        ...(input.color ? { color: input.color } : {}),
+        ...(input.fill ? { fill: input.fill } : {}),
       },
     }
 
@@ -218,6 +220,7 @@ function toCreateShapePartial(
       y: input.y,
       props: {
         richText: toRichText(label),
+        ...(input.color ? { color: input.color } : {}),
       },
     }
 
@@ -232,10 +235,33 @@ function toCreateShapePartial(
     props: {
       w: width,
       richText: toRichText(label),
+      ...(input.color ? { color: input.color } : {}),
     },
   }
 
   return shape
+}
+
+const ANCHOR_POINTS: Record<string, { x: number; y: number }> = {
+  top: { x: 0.5, y: 0 },
+  bottom: { x: 0.5, y: 1 },
+  left: { x: 0, y: 0.5 },
+  right: { x: 1, y: 0.5 },
+  center: { x: 0.5, y: 0.5 },
+}
+
+function resolveAnchor(side?: string) {
+  const anchor = (side && ANCHOR_POINTS[side]) || ANCHOR_POINTS.center
+  // A precise binding pins the arrow to that exact point on the shape edge;
+  // 'center' keeps the legacy auto-routing behavior.
+  return { anchor, isPrecise: Boolean(side) && side !== 'center' }
+}
+
+function anchorPointOnBounds(
+  bounds: { x: number; y: number; w: number; h: number },
+  anchor: { x: number; y: number },
+) {
+  return { x: bounds.x + bounds.w * anchor.x, y: bounds.y + bounds.h * anchor.y }
 }
 
 function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionCommand) {
@@ -257,25 +283,32 @@ function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionC
     throw new Error(`Shape already exists: ${arrowId}`)
   }
 
-  const fromCenter = editor.getShapePageBounds(fromShape)?.center ?? {
-    x: fromShape.x,
-    y: fromShape.y,
-  }
-  const toCenter = editor.getShapePageBounds(toShape)?.center ?? {
-    x: toShape.x,
-    y: toShape.y,
-  }
+  const fromBounds = editor.getShapePageBounds(fromShape)
+  const toBounds = editor.getShapePageBounds(toShape)
+  const start = resolveAnchor(command.input.fromAnchor)
+  const end = resolveAnchor(command.input.toAnchor)
+
+  // Initial terminal points: the chosen anchor on each shape's edge (falls back
+  // to the shape origin if bounds are unavailable). Bindings keep these in sync.
+  const fromPoint = fromBounds
+    ? anchorPointOnBounds(fromBounds, start.anchor)
+    : { x: fromShape.x, y: fromShape.y }
+  const toPoint = toBounds
+    ? anchorPointOnBounds(toBounds, end.anchor)
+    : { x: toShape.x, y: toShape.y }
+
   const arrow: TLCreateShapePartial<TLArrowShape> = {
     id: arrowId,
     type: 'arrow',
-    x: fromCenter.x,
-    y: fromCenter.y,
+    x: fromPoint.x,
+    y: fromPoint.y,
     props: {
       start: { x: 0, y: 0 },
-      end: { x: toCenter.x - fromCenter.x, y: toCenter.y - fromCenter.y },
+      end: { x: toPoint.x - fromPoint.x, y: toPoint.y - fromPoint.y },
       arrowheadStart: 'none',
       arrowheadEnd: command.input.directional === false ? 'none' : 'arrow',
       richText: toRichText(command.input.label ?? ''),
+      ...(command.input.color ? { color: command.input.color } : {}),
     },
   }
   const bindings: TLBindingCreate<TLArrowBinding>[] = [
@@ -286,9 +319,9 @@ function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionC
       toId: fromShapeId,
       props: {
         terminal: 'start',
-        normalizedAnchor: { x: 0.5, y: 0.5 },
+        normalizedAnchor: start.anchor,
         isExact: false,
-        isPrecise: false,
+        isPrecise: start.isPrecise,
       },
     },
     {
@@ -298,9 +331,9 @@ function applyCreateConnectionCommand(editor: Editor, command: CreateConnectionC
       toId: toShapeIdValue,
       props: {
         terminal: 'end',
-        normalizedAnchor: { x: 0.5, y: 0.5 },
+        normalizedAnchor: end.anchor,
         isExact: false,
-        isPrecise: false,
+        isPrecise: end.isPrecise,
       },
     },
   ]

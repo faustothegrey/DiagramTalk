@@ -42,7 +42,9 @@ Create shape:
     "x": 100,
     "y": 100,
     "w": 180,
-    "h": 90
+    "h": 90,
+    "color": "yellow",
+    "fill": "semi"
   }
 }
 ```
@@ -54,6 +56,12 @@ Allowed shape input types:
 - `text`
 - `note`
 
+Optional style fields (applied to geo/note/text shapes):
+
+- `color`: `black, grey, light-violet, violet, blue, light-blue, yellow, orange,
+  green, light-green, light-red, red, white`
+- `fill` (geo only): `none, semi, solid, pattern`
+
 Create connection:
 
 ```json
@@ -64,10 +72,20 @@ Create connection:
     "fromShapeId": "shape:node-a",
     "toShapeId": "shape:node-b",
     "label": "calls",
-    "directional": true
+    "directional": true,
+    "fromAnchor": "right",
+    "toAnchor": "left",
+    "color": "red"
   }
 }
 ```
+
+Optional connection fields:
+
+- `fromAnchor` / `toAnchor`: which side of the source/target the arrow attaches
+  to — `top, bottom, left, right, center`. Defaults to `center` (legacy
+  center-to-center routing). Choosing sides keeps arrows out of box interiors.
+- `color`: same palette as shapes.
 
 ### `GET /api/diagram/commands`
 

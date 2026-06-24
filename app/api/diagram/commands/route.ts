@@ -83,6 +83,28 @@ function isCreateDiagramCommandRequest(
   return false
 }
 
+const SHAPE_COLORS = new Set([
+  'black',
+  'grey',
+  'light-violet',
+  'violet',
+  'blue',
+  'light-blue',
+  'yellow',
+  'orange',
+  'green',
+  'light-green',
+  'light-red',
+  'red',
+  'white',
+])
+const SHAPE_FILLS = new Set(['none', 'semi', 'solid', 'pattern'])
+const CONNECTION_ANCHORS = new Set(['top', 'bottom', 'left', 'right', 'center'])
+
+function isOptionalEnum(value: unknown, allowed: Set<string>) {
+  return value === undefined || (typeof value === 'string' && allowed.has(value))
+}
+
 function isCreateShapeInput(value: unknown) {
   if (!value || typeof value !== 'object') return false
 
@@ -100,7 +122,9 @@ function isCreateShapeInput(value: unknown) {
     (input.id === undefined || typeof input.id === 'string') &&
     (input.label === undefined || typeof input.label === 'string') &&
     (input.w === undefined || (typeof input.w === 'number' && Number.isFinite(input.w))) &&
-    (input.h === undefined || (typeof input.h === 'number' && Number.isFinite(input.h)))
+    (input.h === undefined || (typeof input.h === 'number' && Number.isFinite(input.h))) &&
+    isOptionalEnum(input.color, SHAPE_COLORS) &&
+    isOptionalEnum(input.fill, SHAPE_FILLS)
   )
 }
 
@@ -116,6 +140,9 @@ function isCreateConnectionInput(value: unknown) {
     input.toShapeId.length > 0 &&
     (input.id === undefined || typeof input.id === 'string') &&
     (input.label === undefined || typeof input.label === 'string') &&
-    (input.directional === undefined || typeof input.directional === 'boolean')
+    (input.directional === undefined || typeof input.directional === 'boolean') &&
+    isOptionalEnum(input.fromAnchor, CONNECTION_ANCHORS) &&
+    isOptionalEnum(input.toAnchor, CONNECTION_ANCHORS) &&
+    isOptionalEnum(input.color, SHAPE_COLORS)
   )
 }

@@ -24,6 +24,15 @@ MIN_WIDTH = 140
 MAX_WIDTH = 300
 MIN_HEIGHT = 60
 
+# Allowed tldraw style values, mirrored from the API schema in
+# lib/diagramApiTypes.ts so the CLI rejects bad values before hitting the server.
+SHAPE_COLORS = [
+    "black", "grey", "light-violet", "violet", "blue", "light-blue",
+    "yellow", "orange", "green", "light-green", "light-red", "red", "white",
+]
+SHAPE_FILLS = ["none", "semi", "solid", "pattern"]
+CONNECTION_ANCHORS = ["top", "bottom", "left", "right", "center"]
+
 LAYOUT_DEFAULTS = {
     "originX": 80,
     "originY": 120,
@@ -113,7 +122,9 @@ def cmd_commands(args):
     print_json(request("GET", path))
 
 
-def build_shape_payload(shape_id, shape_type, label, x, y, w=None, h=None):
+def build_shape_payload(
+    shape_id, shape_type, label, x, y, w=None, h=None, color=None, fill=None
+):
     """Build a createShape input, auto-sizing when w/h are not supplied."""
     auto_w, auto_h = estimate_label_size(label or "")
     input_payload = {
@@ -129,12 +140,17 @@ def build_shape_payload(shape_id, shape_type, label, x, y, w=None, h=None):
     if shape_type != "note":
         input_payload["w"] = w if w is not None else auto_w
         input_payload["h"] = h if h is not None else auto_h
+    if color:
+        input_payload["color"] = color
+    if fill:
+        input_payload["fill"] = fill
     return input_payload
 
 
 def cmd_shape(args):
     input_payload = build_shape_payload(
-        args.id, args.type, args.label, args.x, args.y, args.w, args.h
+        args.id, args.type, args.label, args.x, args.y, args.w, args.h,
+        args.color, args.fill,
     )
     print_json(
         request(
@@ -154,6 +170,12 @@ def cmd_connect(args):
     }
     if args.id:
         input_payload["id"] = args.id
+    if args.from_anchor:
+        input_payload["fromAnchor"] = args.from_anchor
+    if args.to_anchor:
+        input_payload["toAnchor"] = args.to_anchor
+    if args.color:
+        input_payload["color"] = args.color
 
     print_json(
         request(
@@ -229,6 +251,21 @@ def _place_lane(nodes, lane_y, centers, cfg):
         cursor = x + node["_w"] + cfg["colGap"]
 
 
+def _center(shape):
+    return (shape["_x"] + shape["_w"] / 2, shape["_y"] + shape["_h"] / 2)
+
+
+def derive_anchors(src, dst):
+    """Pick exit/entry sides from geometry: horizontal edges leave the right and
+    enter the left; vertical edges leave the bottom/top. Keeps arrows in the
+    gaps between shapes instead of cutting across box interiors."""
+    sx, sy = _center(src)
+    dx, dy = _center(dst)
+    if abs(dx - sx) >= abs(dy - sy):
+        return ("right", "left") if dx >= sx else ("left", "right")
+    return ("bottom", "top") if dy >= sy else ("top", "bottom")
+
+
 def _overlaps(a, b, margin=0):
     return not (
         a["_x"] + a["_w"] + margin <= b["_x"]
@@ -252,23 +289,26 @@ def compute_layout(spec):
     centers = _grid_columns(lanes, cfg)
 
     shapes = []
+    shapes_by_id = {}
     for lane_index, lane in enumerate(lanes):
         lane_y = cfg["originY"] + lane_index * cfg["rowPitch"]
         nodes = lane.get("nodes", [])
         _place_lane(nodes, lane_y, centers, cfg)
         default_type = lane.get("type", "box")
         for node in nodes:
-            shapes.append(
-                {
-                    "id": node["id"],
-                    "type": node.get("type", default_type),
-                    "label": node.get("label", ""),
-                    "_x": node["_x"],
-                    "_y": node["_y"],
-                    "_w": node["_w"],
-                    "_h": node["_h"],
-                }
-            )
+            shape = {
+                "id": node["id"],
+                "type": node.get("type", default_type),
+                "label": node.get("label", ""),
+                "_x": node["_x"],
+                "_y": node["_y"],
+                "_w": node["_w"],
+                "_h": node["_h"],
+                "color": node.get("color", lane.get("color")),
+                "fill": node.get("fill", lane.get("fill")),
+            }
+            shapes.append(shape)
+            shapes_by_id[shape["id"]] = shape
 
     annotations = spec.get("annotations", [])
     if annotations:
@@ -286,12 +326,22 @@ def compute_layout(spec):
                 "_y": band_y,
                 "_w": w,
                 "_h": h,
+                "color": ann.get("color"),
+                "fill": ann.get("fill"),
             }
             shapes.append(ann_shape)
-            by_id[ann["id"]] = ann_shape
+            shapes_by_id[ann_shape["id"]] = ann_shape
             cursor += w + cfg["colGap"]
 
     edges = spec.get("edges", [])
+    # Auto-assign anchor sides from geometry unless the edge specifies them.
+    for edge in edges:
+        src = shapes_by_id.get(edge["from"])
+        dst = shapes_by_id.get(edge["to"])
+        if src and dst:
+            auto_from, auto_to = derive_anchors(src, dst)
+            edge["_fromAnchor"] = edge.get("fromAnchor", auto_from)
+            edge["_toAnchor"] = edge.get("toAnchor", auto_to)
     return shapes, edges
 
 
@@ -322,10 +372,23 @@ def cmd_layout(args):
                     "y": round(s["_y"]),
                     "w": round(s["_w"]),
                     "h": round(s["_h"]),
+                    "color": s.get("color"),
+                    "fill": s.get("fill"),
                 }
                 for s in shapes
             ],
-            "edges": edges,
+            "edges": [
+                {
+                    "id": e.get("id"),
+                    "from": e["from"],
+                    "to": e["to"],
+                    "label": e.get("label", ""),
+                    "fromAnchor": e.get("_fromAnchor"),
+                    "toAnchor": e.get("_toAnchor"),
+                    "color": e.get("color"),
+                }
+                for e in edges
+            ],
             "overlaps": overlaps,
             "ok": not overlaps,
         }
@@ -339,7 +402,7 @@ def cmd_layout(args):
     for s in shapes:
         payload = build_shape_payload(
             s["id"], s["type"], s["label"], round(s["_x"]), round(s["_y"]),
-            round(s["_w"]), round(s["_h"]),
+            round(s["_w"]), round(s["_h"]), s.get("color"), s.get("fill"),
         )
         results["shapes"].append(
             request("POST", "/api/diagram/commands", {"type": "createShape", "input": payload})
@@ -353,6 +416,12 @@ def cmd_layout(args):
         }
         if e.get("id"):
             payload["id"] = e["id"]
+        if e.get("_fromAnchor"):
+            payload["fromAnchor"] = e["_fromAnchor"]
+        if e.get("_toAnchor"):
+            payload["toAnchor"] = e["_toAnchor"]
+        if e.get("color"):
+            payload["color"] = e["color"]
         results["edges"].append(
             request("POST", "/api/diagram/commands", {"type": "createConnection", "input": payload})
         )
@@ -383,6 +452,8 @@ def build_parser():
     shape.add_argument("--y", required=True, type=float)
     shape.add_argument("--w", type=float)
     shape.add_argument("--h", type=float)
+    shape.add_argument("--color", choices=SHAPE_COLORS)
+    shape.add_argument("--fill", choices=SHAPE_FILLS)
     shape.set_defaults(func=cmd_shape)
 
     connect = subparsers.add_parser("connect", help="Queue a createConnection command.")
@@ -391,6 +462,9 @@ def build_parser():
     connect.add_argument("--to", required=True, dest="to_shape")
     connect.add_argument("--label", default="")
     connect.add_argument("--undirected", action="store_true")
+    connect.add_argument("--from-anchor", dest="from_anchor", choices=CONNECTION_ANCHORS)
+    connect.add_argument("--to-anchor", dest="to_anchor", choices=CONNECTION_ANCHORS)
+    connect.add_argument("--color", choices=SHAPE_COLORS)
     connect.set_defaults(func=cmd_connect)
 
     layout = subparsers.add_parser(
