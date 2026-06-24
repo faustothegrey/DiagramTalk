@@ -1,7 +1,7 @@
 import {
-  getStoredDiagramSnapshot,
-  saveDiagramSnapshot,
-} from '@/lib/diagramSnapshotStore'
+  getActiveDiagram,
+  updateDiagram,
+} from '@/lib/diagramStore'
 import type {
   GetDiagramSnapshotResponse,
   PublishDiagramSnapshotRequest,
@@ -12,7 +12,15 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    const response: GetDiagramSnapshotResponse = await getStoredDiagramSnapshot()
+    const active = await getActiveDiagram()
+    const response: GetDiagramSnapshotResponse = active
+      ? {
+          id: active.id,
+          snapshot: active.snapshot,
+          name: active.name,
+          updatedAt: active.updatedAt,
+        }
+      : { id: null, snapshot: null, name: null, updatedAt: null }
 
     return Response.json(response)
   } catch (error) {
@@ -35,12 +43,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const updatedAt = await saveDiagramSnapshot({
+    // A save targets the diagram named by `id`, falling back to the active one.
+    const targetId = payload.id ?? (await getActiveDiagram())?.id ?? null
+
+    if (!targetId) {
+      return Response.json({ error: 'No diagram to save.' }, { status: 404 })
+    }
+
+    const updated = await updateDiagram(targetId, {
       snapshot: payload.snapshot,
       name: payload.name,
     })
-    const response: PublishDiagramSnapshotResponse = { ok: true, updatedAt }
 
+    if (!updated) {
+      return Response.json({ error: 'Diagram not found.' }, { status: 404 })
+    }
+
+    const response: PublishDiagramSnapshotResponse = { ok: true, updatedAt: updated.updatedAt }
     return Response.json(response)
   } catch (error) {
     console.error('[api/diagram/snapshot]', error)
@@ -54,12 +73,14 @@ function isPublishDiagramSnapshotRequest(
   if (!value || typeof value !== 'object') return false
 
   const maybeRequest = value as Partial<PublishDiagramSnapshotRequest>
+  const id = maybeRequest.id
   const snapshot = maybeRequest.snapshot
   const name = maybeRequest.name
 
   const hasSnapshot = snapshot !== undefined
   const hasName = name !== undefined
 
+  if (id !== undefined && typeof id !== 'string') return false
   if (!hasSnapshot && !hasName) return false
 
   if (hasSnapshot && (!snapshot || typeof snapshot !== 'object')) return false

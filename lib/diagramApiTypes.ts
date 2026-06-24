@@ -123,12 +123,15 @@ export type AskDiagramResponse = {
 }
 
 export type GetDiagramSnapshotResponse = {
+  id: string | null
   snapshot: DiagramSnapshot | null
   name: string | null
   updatedAt: string | null
 }
 
 export type PublishDiagramSnapshotRequest = {
+  // When omitted, the currently active diagram is updated.
+  id?: string
   snapshot?: DiagramSnapshot
   name?: string | null
 }
@@ -136,4 +139,41 @@ export type PublishDiagramSnapshotRequest = {
 export type PublishDiagramSnapshotResponse = {
   ok: true
   updatedAt: string
+}
+
+export type DiagramSummary = {
+  id: string
+  name: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type DiagramRecord = DiagramSummary & {
+  snapshot: DiagramSnapshot | null
+}
+
+export type ListDiagramsResponse = {
+  activeId: string | null
+  diagrams: DiagramSummary[]
+}
+
+export type CreateDiagramRequest = {
+  name?: string | null
+}
+
+export type UpdateDiagramRequest = {
+  name?: string | null
+  snapshot?: DiagramSnapshot
+  // Set to true to make this diagram the active one.
+  active?: boolean
+}
+
+export type DiagramRecordResponse = {
+  diagram: DiagramRecord
+  activeId: string | null
+}
+
+export type DeleteDiagramResponse = {
+  deleted: boolean
+  activeId: string | null
 }
