@@ -49,7 +49,7 @@ const tldrawComponents: TLComponents = {
 
 const PANEL_WIDTH_STORAGE_KEY = 'diagramtalk:panelWidth'
 const DEFAULT_PANEL_WIDTH = 400
-const MIN_PANEL_WIDTH = 320
+const MIN_PANEL_WIDTH = 0
 const MIN_CANVAS_WIDTH = 480
 
 function clampPanelWidth(width: number) {
@@ -72,7 +72,9 @@ export function DiagramWorkspace() {
   const [panelWidth, setPanelWidth] = useState(() => {
     if (typeof window === 'undefined') return DEFAULT_PANEL_WIDTH
     const stored = Number(window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY))
-    return Number.isFinite(stored) && stored > 0 ? clampPanelWidth(stored) : DEFAULT_PANEL_WIDTH
+    return Number.isFinite(stored) && stored >= MIN_PANEL_WIDTH
+      ? clampPanelWidth(stored)
+      : DEFAULT_PANEL_WIDTH
   })
   const [isResizing, setIsResizing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
