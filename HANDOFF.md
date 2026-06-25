@@ -1,227 +1,411 @@
-# DiagramTalk — Engineering Handoff
+# DiagramTalk Engineering Handoff
 
-A working handoff for an agent picking up this project. Read this first, then
-`PROJECT.md` (original product brief) and `diagramtalk/SKILL.md` (the agent-facing
-skill). Current `main` head when written: `2682688`.
+Read this first when starting a fresh session. Then read `PROJECT.md` for the
+original product brief and `diagramtalk/SKILL.md` for the agent-facing workflow.
 
----
+Current pushed `main` when this handoff was refreshed: `eaf2128`.
 
-## 1. What this is
+## 1. What This Is
 
-DiagramTalk is a Next.js + **tldraw** whiteboard where (a) a human draws and chats
-with an LLM about the diagram, and (b) an **external agent** can drive the canvas
-programmatically through a local HTTP API and a Python CLI (the `diagramtalk`
-skill). It runs locally at `http://localhost:3000`.
+DiagramTalk is a local Next.js + tldraw whiteboard with two first-class users:
 
-Two clients of the same app:
-- **Human**: draws on the canvas, uses the chat panel, switches/saves diagrams.
-- **Agent** (e.g. Codex/Claude via the skill): posts commands to create shapes,
-  connect them, clear, frame the camera, render to an image, save,
-  pulse-highlight existing elements, move state tags, record timed runs, and
-  manage multiple diagrams — all over REST.
+- A human who draws, chats with an LLM about the diagram, exports, saves, and
+  switches named diagrams.
+- An external agent or test driver that controls the canvas through REST and the
+  bundled `diagramtalk` Python CLI.
 
-## 2. Stack & how to run
+The app normally runs at:
 
-- Next.js `^16` (App Router), React `^19`, TypeScript, **tldraw `^5.1.1`**,
-  `pdf-lib` (PDF export). LLM via OpenRouter.
-- Scripts: `npm run dev`, `npm run build`, `npm run typecheck` (`tsc --noEmit`),
-  `npm run lint` (`eslint .`), `npm run test:e2e` (Playwright/Chromium on
-  `localhost:3001` by default).
-- Env: copy `.env.example` → `.env`; set `OPENROUTER_API_KEY` (used by chat/ask
-  only — the diagram command/render/save APIs do **not** need it).
-- CLI: `python3 diagramtalk/scripts/diagramtalk.py <verb>` (stdlib only, no deps).
-  Override base URL with `DIAGRAMTALK_URL`.
-
-## 3. The one architectural fact that explains everything
-
-**tldraw only runs in the browser tab.** The Next server is a relay/store — it has
-no tldraw and cannot read or mutate the live canvas. So:
-
-- Mutations (createShape, clearDiagram, setCamera, …) are **queued** on the server
-  and **applied by the browser bridge** (`DiagramApiBridge.tsx`) which polls the
-  queue and calls the tldraw `Editor`. **No open tab ⇒ commands sit `pending`.**
-- Anything that needs the live canvas (render an image, save the current canvas)
-  is **pull-based**: the caller registers a request; the bridge polls, fulfills it
-  (export / flush snapshot), and writes the result/timestamp back. The CLI then
-  polls for completion. This same pattern is used by **render** and **save**.
-- The agent has no direct view of the canvas; it "sees" via `render` (image) and
-  `context` (structured JSON). The live *viewport* (camera) is only visible to a
-  human — `render` exports content bounds, not the viewport (see §7).
-
-## 4. Directory map
-
+```bash
+npm run dev
 ```
+
+Default URL:
+
+```txt
+http://localhost:3000
+```
+
+The agent can create shapes, connect elements, clear diagrams, frame the camera,
+render images, explicitly save, pulse-highlight elements, move live state tags,
+record timed runs, and manage named diagrams.
+
+## 2. Stack
+
+- Next.js App Router, React, TypeScript.
+- tldraw `^5.1.1`.
+- Playwright e2e suite on `localhost:3001` by default.
+- `pdf-lib` for PDF export.
+- OpenRouter only for chat/ask. The diagram API, save, render, recording, and
+  CLI workflows do not need `OPENROUTER_API_KEY`.
+
+Useful commands:
+
+```bash
+npm run dev
+npm run typecheck
+npm run lint
+npm run test:e2e
+python3 -m py_compile diagramtalk/scripts/diagramtalk.py
+```
+
+## 3. Architecture In One Fact
+
+tldraw only runs in the browser tab. The Next server is a relay and persistence
+layer; it cannot directly inspect or mutate the live canvas.
+
+Consequences:
+
+- Mutating API calls enqueue commands in memory.
+- `DiagramApiBridge.tsx` runs inside the browser, polls pending commands, applies
+  them through the tldraw `Editor`, then reports success/failure.
+- No open app tab means commands remain `pending`.
+- Render and explicit save are pull-based: the server records a request, the
+  browser bridge fulfills it, then the caller polls for completion.
+- Diagrams persist to `.diagramtalk/diagrams/`, but command queue, published
+  context, render cache, and save request state are in-memory and reset on a
+  Next.js restart.
+
+## 4. Important Runtime Semantics
+
+### Autosave
+
+The browser bridge autosaves the active diagram snapshot after canvas changes by
+posting to `/api/diagram/snapshot`.
+
+Snapshot shape data is under:
+
+```txt
+snapshot.document.store["shape:*"]
+```
+
+Do not count a top-level `snapshot.store`; that is the wrong shape location for
+current snapshots.
+
+### Recording Freeze
+
+When a recording is active for a diagram, base diagram persistence is frozen:
+
+- Autosave snapshot posts return `409`.
+- Explicit `POST /api/diagram/save` returns `409`.
+- Run-time visual events still persist to the recording.
+
+This is deliberate. A recording is a run log over a stable base diagram. During
+a run, drivers should use `highlight` and `setStateTag`; after the run, end the
+recording before making structural edits that should become the saved baseline.
+
+### Recordings
+
+Recordings persist under:
+
+```txt
+.diagramtalk/recordings/
+.diagramtalk/recordings-index.json
+```
+
+Only one recording is active at a time. Starting a new one closes any previous
+open recording. Recorded events are appended when the browser bridge reports an
+applied `highlight` or `setStateTag` command for the recording's diagram.
+
+Each event stores:
+
+- `commandId`
+- `type`
+- original `input`
+- `occurredAt`
+- `elapsedMs`
+
+Playback/replay is not implemented yet.
+
+### State Tags
+
+State tags are live overlays rendered above tldraw, not shapes. They are meant
+for state-machine diagrams where an external app/test runner wants to show the
+agent's current state.
+
+Rules:
+
+- Command type: `setStateTag`.
+- Target must be a box/rectangle shape.
+- Reusing the same `tagId` moves that tag.
+- Tags do not mutate snapshots or renders.
+
+### Highlights
+
+Highlights are also live overlays, not tldraw highlighter shapes. They pulse
+around existing shape ids and do not change snapshots or renders.
+
+Connections are arrow shapes, so use `connection.arrowId` from
+`/api/diagram/context` when highlighting an edge.
+
+## 5. Directory Map
+
+```txt
 app/
-  page.tsx                         -> <DiagramWorkspace/>
+  page.tsx
   api/
-    chat/route.ts                  POST: LLM chat (OpenRouter) for the chat panel
+    chat/route.ts
+    diagrams/route.ts
+    diagrams/[id]/route.ts
     diagram/
-      context/route.ts             GET/POST: latest normalized canvas context (in-memory)
-      snapshot/route.ts            GET/POST: active diagram's tldraw snapshot (autosave target)
-      commands/route.ts            GET/POST: queue of mutation commands
-      commands/[id]/result/route.ts POST: bridge reports applied/failed
-      render/route.ts              POST request / PUT upload / GET bytes|meta (pull-based)
-      save/route.ts                POST request / GET status (pull-based)
-      recordings/route.ts          GET list / POST start recording
-      recordings/[id]/route.ts     GET recording / PATCH end recording (`active` alias)
-      ask/route.ts                 POST: LLM Q&A about server-known context
-    diagrams/route.ts              GET list+activeId / POST create
-    diagrams/[id]/route.ts         GET / PATCH (rename|snapshot|active) / DELETE
+      context/route.ts
+      snapshot/route.ts
+      commands/route.ts
+      commands/[id]/result/route.ts
+      render/route.ts
+      save/route.ts
+      recordings/route.ts
+      recordings/[id]/route.ts
+      ask/route.ts
+
 components/
-  DiagramWorkspace.tsx             Top-level orchestrator: diagram list/active state,
-                                   load/switch/create/delete, resizable panel, Save handler.
-                                   Mounts <Tldraw key={activeId} components={{StylePanel:null}}>.
-  DiagramApiBridge.tsx             THE BRIDGE. Runs inside tldraw. Polls commands/render/save,
-                                   applies them via Editor, autosaves snapshot + publishes context.
-  DiagramHighlightOverlay.tsx      Transient in-front-of-canvas pulse overlay for highlight commands.
-  DiagramSwitcher.tsx              Top bar: diagram dropdown + Save / + New / Delete buttons.
-  ChatPanel.tsx                    Chat tab + Commands tab (name, PDF/SVG export).
-  SelectionSummary.tsx            Selection readout in the chat panel.
+  DiagramWorkspace.tsx
+  DiagramApiBridge.tsx
+  DiagramCanvasOverlay.tsx
+  DiagramHighlightOverlay.tsx
+  DiagramStateTagOverlay.tsx
+  DiagramSwitcher.tsx
+  ChatPanel.tsx
+  SelectionSummary.tsx
+
 lib/
-  diagramApiTypes.ts               ALL wire types (commands, requests, responses). Client-safe.
-  diagramStore.ts                  Per-diagram persistence: .diagramtalk/diagrams/<id>.json + index.json
-  diagramApiStore.ts               In-memory: published context + command queue (global, resets on restart)
-  diagramRenderStore.ts            In-memory: render request + cached renders
-  diagramSaveStore.ts              In-memory: save request + savedAt timestamps
-  diagramRecordingStore.ts         Persistent timed logs of applied highlight/tag commands.
-  diagramContext.ts                Builds normalized DiagramContext from the tldraw editor
-  diagramExport.ts                 Client-side PDF/SVG export (editor.toImage / getSvgString)
-  diagramHighlight.ts              Shared event name/types for transient highlight pulses.
-  openrouter.ts, types.ts          LLM client + shared chat/context types
-diagramtalk/                       The skill (consumed by an external agent)
-  SKILL.md                         Workflow + operations (the entry point for the agent)
-  PRINCIPLES.md                    "Verify geometry, don't infer it" — the linchpin
-  LIMITATIONS.md                   Known bridge/engine limits + deferred work
-  references/api.md                Full HTTP API reference
-  scripts/diagramtalk.py           The CLI + layout engine (compute_layout, find_overlaps,
-                                   find_arrow_crossings)
-  examples/consensus-protocol.json A real 26-node / 20-edge layout spec
+  diagramApiTypes.ts
+  diagramStore.ts
+  diagramApiStore.ts
+  diagramRenderStore.ts
+  diagramSaveStore.ts
+  diagramRecordingStore.ts
+  diagramContext.ts
+  diagramExport.ts
+  diagramHighlight.ts
+  diagramStateTags.ts
+  openrouter.ts
+  types.ts
+
+diagramtalk/
+  SKILL.md
+  PRINCIPLES.md
+  LIMITATIONS.md
+  references/api.md
+  scripts/diagramtalk.py
+  examples/consensus-protocol.json
+
+tests/e2e/diagram-api.spec.ts
+playwright.config.ts
 ```
 
-## 5. HTTP API surface (all under `http://localhost:3000`)
+## 6. Main API Surface
 
-- `GET  /api/diagram/context` — latest canvas context (shapes/connections/summary).
-- `GET/POST /api/diagram/snapshot` — read/write the **active** diagram's tldraw
-  snapshot. POST body `{ id?, snapshot?, name? }`; the bridge autosaves here.
-  POST returns `409` while the target diagram has an active recording.
-- `POST /api/diagram/commands` — queue a command. Body `{ type, input?, diagramId? }`:
-  - `createShape`  `{ type:'box'|'ellipse'|'text'|'note', x, y, w?, h?, label?, color?, fill? }`
-  - `createConnection` `{ fromShapeId, toShapeId, label?, directional?, fromAnchor?, toAnchor?, color?, routing?:'straight'|'orthogonal' }`
-  - `clearDiagram`  (deletes all shapes on the page)
-  - `setCamera`     `{ mode:'fit', padding? } | { mode:'topLeft', margin?, zoom? } | { mode:'absolute', x, y, zoom } }` (view-only)
-  - `highlight`     `{ ids:string[], color?:'yellow'|'blue'|'green'|'red'|'violet', durationMs?, padding? }` (view-only transient pulse)
-  - `setStateTag`   `{ shapeId?, label?, tagId?, color?, clear? }` (view-only current-state badge on box shapes)
-  - Optional `diagramId` targets a non-active diagram (validated; **auto-activate** — the open tab switches to it, applies, saves).
-- `GET  /api/diagram/commands?status=pending|applied|failed` — list queue.
-- `POST /api/diagram/commands/[id]/result` — bridge reports outcome.
-- `POST/GET /api/diagram/render` — request a render / fetch bytes; `GET ?id=&meta=1`
-  for status. `PUT` is the bridge upload. Formats png|svg.
-- `POST/GET /api/diagram/save` — request a save / poll `{ id, savedAt, request }`
-  (`POST` returns `409` while the target diagram has an active recording).
-- `GET/POST /api/diagram/recordings` — list recordings / start recording the
-  active or specified diagram.
-- `GET/PATCH /api/diagram/recordings/{id|active}` — read a recording / end it.
-- `GET  /api/diagrams` — `{ activeId, diagrams[] }`.
-- `POST /api/diagrams` — create (becomes active).
-- `GET/PATCH/DELETE /api/diagrams/[id]` — get / rename·snapshot·`{active:true}` / delete.
-- `POST /api/diagram/ask` — LLM answer about the latest context.
+Base URL:
 
-## 6. CLI verbs (`diagramtalk.py`)
+```txt
+http://localhost:3000
+```
 
-`context · snapshot · diagrams · new · use · rename · delete · commands · clear ·
-camera · highlight · tag · record · save · render · shape · connect · layout · ask · wait`
+Diagrams:
 
-Most mutating verbs accept `--diagram <id>` (auto-activate). `layout <spec>` runs
-the collision-checked layout engine; `--dry-run` previews `overlaps` +
-`arrowCrossings`, `--post` queues it, `--replace` clears first. `render --out f`,
-`save`, `highlight`, and `camera --fit|--top-left|--x --y --zoom` need an open tab.
+- `GET /api/diagrams`
+- `POST /api/diagrams`
+- `GET /api/diagrams/{id}`
+- `PATCH /api/diagrams/{id}`
+- `DELETE /api/diagrams/{id}`
 
-## 7. Conventions & gotchas (learned the hard way — read these)
+Context and snapshots:
 
-- **Snapshot shape lives under `document.store`.** `getSnapshot(editor.store)`
-  returns `{ document, session }`; shapes are `document.store["shape:*"]`, NOT a
-  top-level `store`. Counting top-level `store` gives 0 and will mislead you.
-- **The bridge only runs in an open tab.** Without one: commands stay `pending`,
-  `render`/`save` time out. Many "bugs" are just "no tab open / stale tab".
-- **Auto-activate is single-shot per bridge instance** (`requestedActivationRef`).
-  Don't reintroduce a per-poll `onRequestActivate` call — it caused a switch storm
-  (multiple concurrent diagram switches) that exposed the next bug.
-- **Atomic writes need unique temp names.** `diagramStore.writeJsonAtomically`
-  uses `randomUUID()` in the temp filename; `pid.timestamp` collided under
-  concurrent same-file writes → `rename` ENOENT → 500.
-- **In-memory vs persisted.** Diagrams persist to `.diagramtalk/` (gitignored).
-  Context, command queue, render cache, save state are **in-memory and reset on
-  Next.js restart**. The command queue is **global**, applied by whatever tab is
-  on the active diagram.
-- **Camera is view-only** and never mutates shapes. Math:
-  viewport-relative `screen = (page + camera) * z`, so top-left framing is
-  `camera = margin/z − pageTopLeft`. (`z` is zoom in tldraw's `{x,y,z}`.)
-- **`render` exports the content bounding box, not the viewport.** So camera
-  framing is invisible in renders; `render` always shows a tight crop of shapes.
-- **tldraw 5.1.1 supports native elbow arrows** (`props.kind:'arc'|'elbow'`). The
-  layout engine's `find_arrow_crossings` checks orthogonal edges along their
-  routed (elbow) polyline so checker and renderer agree. Orthogonal alone does NOT
-  dodge intermediate boxes — pair it with gap-routing anchors (e.g. bottom→bottom).
-- **Highlight is not a tldraw highlighter shape.** It is a transient React overlay
-  in `InFrontOfTheCanvas`, addressed by real shape ids. It never changes snapshots
-  or renders, and it fails if any requested id is missing.
-- **Recordings are append-only run logs, not playback yet.** Start a recording,
-  drive `highlight`/`setStateTag`, then end it. Events are appended when the
-  browser bridge reports the command as applied, with `occurredAt` and
-  `elapsedMs`. Data persists in `.diagramtalk/recordings/`. Starting a new
-  recording closes any previous open recording before making the new one active.
-- **A recording freezes base diagram persistence.** Autosave and explicit
-  `/api/diagram/save` do not update a diagram while that diagram has an active
-  recording. During a run, persist visual state with `highlight`/`setStateTag`;
-  end the recording before structural edits that should become the saved
-  baseline.
+- `GET /api/diagram/context`
+- `POST /api/diagram/context`
+- `GET /api/diagram/snapshot`
+- `POST /api/diagram/snapshot`
 
-## 8. Feature history (newest first)
+Commands:
 
-- Autosave/save freeze while a recording is active.
-- `2682688` Dynamic state tags + timed recording facility; sidebar can fully collapse.
-- `f603f47` Transient highlight command/API/CLI + Playwright e2e suite.
-- `9a1e87f` Explicit Save (UI button + `/api/diagram/save` + CLI `save`).
-- `2261d83` `setCamera` view command + `camera` CLI (fit / topLeft / absolute).
-- `3761e19` Orthogonal/elbow routing (`routing` on connections; engine routed-path check).
-- `b4ce34b` clear/replace, render endpoint, and target-any-diagram (`diagramId`/auto-activate).
-- `786da35` Hide tldraw style panel; resizable chat sidebar.
-- `79cae24`+`ad6c582` Multiple named diagrams (per-file store + active pointer) and skill docs.
-- Earlier: layout engine, color/fill + arrow anchors, arrow-crossing detection,
-  the "verify geometry" principle.
+- `POST /api/diagram/commands`
+- `GET /api/diagram/commands?status=pending|applied|failed`
+- `POST /api/diagram/commands/{id}/result`
 
-## 9. Open items / next steps
+Supported command types:
 
-- **Task 4 (engine, not started):** 2D / "snake" (alternating-row) placement and
-  **self-loop** edges (a state → itself) in `compute_layout`. Tracked in
-  `diagramtalk/LIMITATIONS.md`. Ownership was left to the user/agent — confirm before doing.
-- **Render-framing nice-to-have:** make `render` optionally reflect the camera
-  viewport (e.g. `?mode=topLeft`) so "see" matches "frame". Not done — `render`
-  exports shape bounds, so this needs exporting a viewport region (not cheap).
-- **Live verification:** Playwright now covers command bridge shape/connection
-  creation, targeted diagram auto-activation, explicit save, PNG/SVG render,
-  camera movement, and transient highlight behavior. Use `npm run test:e2e`;
-  it starts a separate app server on port 3001.
-- **Housekeeping:** the remote branch `origin/task3-elbow-routing` is merged but
-  not deleted.
+- `createShape`
+- `createConnection`
+- `clearDiagram`
+- `setCamera`
+- `highlight`
+- `setStateTag`
 
-## 10. How to work in this repo (norms established with the owner)
+Any command may include `diagramId`. If present, the open browser tab
+auto-activates that diagram before applying the command.
 
-- **Don't disturb the running dev server.** The owner usually has `npm run dev`
-  live and is *using* it. Do implementation in an isolated **git worktree** with a
-  symlinked `node_modules`, e.g.:
-  ```bash
-  git worktree add /tmp/wt -b my-branch
-  ln -s "$PWD/node_modules" /tmp/wt/node_modules   # tsc/eslint without npm install
-  ```
-  Editing files in the main checkout hot-reloads (disrupts) the owner's session.
-- **Verify** with `tsc --noEmit`, `eslint`, `python3 -m py_compile` in the worktree.
-  Use `npm run test:e2e` for browser bridge/visual behavior; it runs against a
-  separate dev server on port 3001 and should not disturb the owner's port 3000
-  session.
-- **Commit/push only when asked.** Merging a branch to `main` updates the owner's
-  working tree (hot-reload), so do it on request. Keep build churn out
-  (`next-env.d.ts` dev/prod path flip; `__pycache__/`).
-- **Update docs with code:** any API/CLI change → `diagramtalk/references/api.md`
-  + `diagramtalk/SKILL.md`, and report the new signatures so the skill can reload.
-- Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+Render and save:
+
+- `POST /api/diagram/render`
+- `GET /api/diagram/render?id=<id>&meta=1`
+- `GET /api/diagram/render?id=<id>`
+- `PUT /api/diagram/render`
+- `POST /api/diagram/save`
+- `GET /api/diagram/save?id=<id>`
+
+Recording:
+
+- `GET /api/diagram/recordings`
+- `POST /api/diagram/recordings`
+- `GET /api/diagram/recordings/{id}`
+- `GET /api/diagram/recordings/active`
+- `PATCH /api/diagram/recordings/{id}`
+- `PATCH /api/diagram/recordings/active`
+
+LLM:
+
+- `POST /api/diagram/ask`
+- `POST /api/chat`
+
+Full details and payload examples are in `diagramtalk/references/api.md`.
+
+## 7. CLI
+
+Use:
+
+```bash
+python3 diagramtalk/scripts/diagramtalk.py <verb>
+```
+
+Set `DIAGRAMTALK_URL` if the app is not on `localhost:3000`.
+
+Verbs:
+
+```txt
+context
+snapshot
+diagrams
+new
+use
+rename
+delete
+commands
+clear
+camera
+highlight
+tag
+record
+save
+render
+shape
+connect
+layout
+ask
+wait
+```
+
+Common recording flow:
+
+```bash
+python3 diagramtalk/scripts/diagramtalk.py record start --name "Agent run" --diagram <id>
+python3 diagramtalk/scripts/diagramtalk.py highlight shape:waiting --color yellow
+python3 diagramtalk/scripts/diagramtalk.py tag shape:waiting agent --tag-id agent-1
+python3 diagramtalk/scripts/diagramtalk.py tag shape:done agent --tag-id agent-1
+python3 diagramtalk/scripts/diagramtalk.py record end
+python3 diagramtalk/scripts/diagramtalk.py record show <recording-id>
+```
+
+## 8. Layout Discipline
+
+The `diagramtalk` skill is built around this principle:
+
+```txt
+Verify geometry, don't infer it.
+```
+
+For anything larger than a tiny edit, use `diagramtalk/scripts/diagramtalk.py
+layout` with a JSON spec and run `--dry-run` first. The dry run reports:
+
+- `overlaps`
+- `arrowCrossings`
+
+Do not post generated diagrams until overlaps are empty and every remaining
+arrow crossing is either removed or consciously accepted. Read
+`diagramtalk/PRINCIPLES.md` before doing serious diagram generation.
+
+## 9. UI Notes
+
+- The tldraw style panel is disabled.
+- The chat/sidebar can resize all the way to `0px`; the resize handle remains
+  visible.
+- The Commands tab contains a concise Automation note with CLI examples.
+- `DiagramCanvasOverlay` mounts both highlight and state-tag overlays in front
+  of the canvas.
+
+## 10. Test Coverage
+
+The Playwright suite covers:
+
+- Browser bridge shape and connection creation.
+- Targeted diagram auto-activation via `diagramId`.
+- Explicit save persistence.
+- PNG/SVG render export.
+- Camera movement.
+- Transient highlight behavior and missing-id failure.
+- State tags moving between box states and staying out of snapshots.
+- Recording highlight/state-tag events with timestamps.
+- Recording freeze: save is rejected during recording, and live-only structural
+  changes do not enter the persisted snapshot while recording is active.
+
+Run:
+
+```bash
+npm run test:e2e
+```
+
+The suite starts its own server on `localhost:3001`. If another Next dev server
+from the same checkout is registered, Playwright may fail to start; stop the old
+server and rerun.
+
+Latest verification before this handoff:
+
+```txt
+npm run typecheck
+npm run lint
+python3 -m py_compile diagramtalk/scripts/diagramtalk.py
+npm run test:e2e
+```
+
+All passed after commit `eaf2128`.
+
+## 11. Recent Feature History
+
+Newest first:
+
+- `eaf2128` Freeze diagram persistence during recordings.
+- `2682688` Merge state tags and recording facility.
+- `de626a7` Allow sidebar to fully collapse.
+- `6020867` Add state tags and recording facility.
+- `e13ab61` Update Next dev route type reference.
+- `2a527ce` Document highlight and e2e workflows.
+- `f603f47` Add transient diagram highlighting and e2e tests.
+- `4caca99` Add engineering handoff.
+- `9a1e87f` Add explicit Save UI/API/CLI.
+- `2261d83` Add `setCamera` command and CLI.
+- `3761e19` Add orthogonal/elbow routing.
+- `b4ce34b` Add clear/replace, render endpoint, and target-any-diagram support.
+- `786da35` Hide tldraw style panel and add resizable chat sidebar.
+- `79cae24` / `ad6c582` Add multiple named diagrams and skill docs.
+
+## 12. Known Open Items
+
+- Playback/replay from recordings is not implemented.
+- Render exports content bounds, not the current viewport/camera framing.
+- Layout engine still lacks a proper 2D/snake placement mode and self-loop edge
+  support; see `diagramtalk/LIMITATIONS.md`.
+- `next-env.d.ts` and `tsconfig.tsbuildinfo` can change during Next/TS runs.
+  Avoid committing generated metadata churn unless it is intentional.
+
+## 13. Working Norms
+
+- Prefer worktrees for substantial changes so an active dev server is not
+  disturbed.
+- Use `rg` for searches.
+- Use `apply_patch` for manual edits.
+- Do not commit `.diagramtalk/`, `test-results/`, or `playwright-report/`.
+- Commit and push only when asked.
+- After API/CLI behavior changes, update both `diagramtalk/SKILL.md` and
+  `diagramtalk/references/api.md`.
+- For browser-bridge behavior, run `npm run test:e2e`; static checks alone are
+  not enough.
