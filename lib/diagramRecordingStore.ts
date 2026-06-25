@@ -46,6 +46,21 @@ export async function getRecording(id: string): Promise<DiagramRecording | null>
   return readRecording(id)
 }
 
+export async function getActiveRecording(): Promise<DiagramRecording | null> {
+  await ensureRecordingsDir()
+  const recordings = await readRecordings()
+  const index = await readIndex()
+  const activeId = resolveActiveId(index.activeId, recordings)
+  if (activeId !== index.activeId) await writeIndex({ activeId })
+
+  return activeId ? readRecording(activeId) : null
+}
+
+export async function getActiveRecordingForDiagram(diagramId: string) {
+  const recording = await getActiveRecording()
+  return recording?.diagramId === diagramId ? recording : null
+}
+
 export async function startRecording(input: {
   diagramId: string
   name?: string | null

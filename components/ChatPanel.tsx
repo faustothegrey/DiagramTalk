@@ -232,10 +232,12 @@ export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }:
               <p>
                 Every canvas element has an id. Use the DiagramTalk CLI or REST API to create,
                 connect, frame, save, render, pulse-highlight elements, and place live state tags
-                in the open app tab.
+                in the open app tab. Record runs to persist timed highlight/tag events without
+                changing the base diagram snapshot.
               </p>
               <code>python3 diagramtalk/scripts/diagramtalk.py highlight shape:example-node</code>
               <code>python3 diagramtalk/scripts/diagramtalk.py tag shape:waiting agent</code>
+              <code>python3 diagramtalk/scripts/diagramtalk.py record start --name &quot;Agent run&quot;</code>
               <code>npm run test:e2e</code>
             </div>
           </div>

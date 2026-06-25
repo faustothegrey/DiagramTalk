@@ -288,6 +288,11 @@ the browser bridge's applied-command report, so it captures visible event order
 rather than just request enqueue order. A playback/replay endpoint is not
 implemented yet.
 
+While a recording is active for a diagram, that diagram's snapshot persistence
+is frozen: autosave and explicit `save` do not update the base diagram. Persist
+the run with `highlight`/`tag` events, then end the recording before making
+ordinary diagram edits that should become the new saved baseline.
+
 Manage diagrams (list, create + activate, switch, rename, delete):
 
 ```bash
@@ -337,7 +342,8 @@ reflect the camera/viewport framing — `camera` controls what a person sees in
 the app, not the rendered image.
 
 Force-save the current canvas now and wait for it to persist (the canvas also
-autosaves continuously, so this is an explicit checkpoint):
+autosaves continuously, so this is an explicit checkpoint). Save requests are
+rejected while the target diagram has an active recording:
 
 ```bash
 python3 scripts/diagramtalk.py save
@@ -361,6 +367,10 @@ npm run test:e2e
   recording is active; starting a new one closes any previous open recording.
   Only events reported while a recording is active are captured. If commands
   stay pending because no tab is open, no recording event is appended yet.
+- Diagram snapshots autosave after canvas changes, but snapshot persistence is
+  disabled while that diagram has an active recording. During a run, use
+  `highlight` and `tag` so events are appended to the recording instead of
+  mutating the base diagram.
 - Diagrams persist locally, one file per diagram in `.diagramtalk/diagrams/<id>.json`, with the active pointer in `.diagramtalk/index.json`. Only the active diagram is loaded in the editor and acted on by commands.
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
 - Use stable caller-provided IDs when generating diagrams so later commands can connect to known shapes.

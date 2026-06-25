@@ -495,6 +495,37 @@ test('records highlight and state-tag events with timestamps', async ({ page }) 
   }
   expect(started.activeId).toBe(started.recording.id)
 
+  const blockedSaveResponse = await page.request.post('/api/diagram/save', {
+    data: { id: diagramId },
+  })
+  expect(blockedSaveResponse.status()).toBe(409)
+  expect(await blockedSaveResponse.json()).toMatchObject({
+    recordingId: started.recording.id,
+  })
+
+  const liveOnlyShapeId = uniqueId('pw-recording-live-only')
+  const liveOnlyCommand = await queueCommand(page, {
+    type: 'createShape',
+    input: {
+      id: liveOnlyShapeId,
+      type: 'box',
+      label: 'Live only during recording',
+      x: 700,
+      y: 170,
+      w: 190,
+      h: 90,
+    },
+  })
+  await waitForCommand(page, liveOnlyCommand.id)
+
+  await page.waitForTimeout(1500)
+  await expect
+    .poll(async () => {
+      const snapshotShapeIds = await getSnapshotShapeIds(page)
+      return snapshotShapeIds.includes(toShapeId(liveOnlyShapeId))
+    })
+    .toBe(false)
+
   const highlightCommand = await queueCommand(page, {
     type: 'highlight',
     input: {

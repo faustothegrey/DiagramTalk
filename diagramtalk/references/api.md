@@ -329,6 +329,10 @@ flushes the live snapshot.
 Needs the app tab open (the bridge performs the save). CLI: `save [--diagram <id>]`.
 The UI's **Save** button (next to New/Delete) does the same flush directly.
 
+If the target diagram has an active recording, `POST /api/diagram/save` returns
+`409` with `{ error, recordingId }`. Snapshot persistence is frozen during a
+recording so the base diagram is not overwritten by a run.
+
 ### Recording endpoints (`/api/diagram/recordings`)
 
 A recording is a persisted timed reproduction log for externally driven
@@ -361,6 +365,12 @@ the command's diagram matches the recording's `diagramId`. Each event includes:
 - `commandId`
 - `occurredAt`: ISO timestamp when the command was reported applied
 - `elapsedMs`: milliseconds since `recording.startedAt`
+
+While a recording is active for a diagram, the diagram's snapshot persistence is
+disabled. Browser autosave and explicit save requests do not update the diagram
+file; run-time visual events should be expressed as `highlight` and
+`setStateTag`, which are appended to the recording. End the recording before
+making structural edits that should persist as the new base diagram.
 
 End the current recording:
 

@@ -3,6 +3,7 @@ import {
   updateDiagram,
 } from '@/lib/diagramStore'
 import { markSaved } from '@/lib/diagramSaveStore'
+import { getActiveRecordingForDiagram } from '@/lib/diagramRecordingStore'
 import type {
   GetDiagramSnapshotResponse,
   PublishDiagramSnapshotRequest,
@@ -49,6 +50,17 @@ export async function POST(request: Request) {
 
     if (!targetId) {
       return Response.json({ error: 'No diagram to save.' }, { status: 404 })
+    }
+
+    const activeRecording = await getActiveRecordingForDiagram(targetId)
+    if (activeRecording && (payload.snapshot !== undefined || payload.name !== undefined)) {
+      return Response.json(
+        {
+          error: 'Diagram persistence is disabled while a recording is active.',
+          recordingId: activeRecording.id,
+        },
+        { status: 409 },
+      )
     }
 
     const updated = await updateDiagram(targetId, {

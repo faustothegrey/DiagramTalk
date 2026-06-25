@@ -2,7 +2,7 @@
 
 A working handoff for an agent picking up this project. Read this first, then
 `PROJECT.md` (original product brief) and `diagramtalk/SKILL.md` (the agent-facing
-skill). Current `main` head when written: `e13ab61`.
+skill). Current `main` head when written: `2682688`.
 
 ---
 
@@ -103,6 +103,7 @@ diagramtalk/                       The skill (consumed by an external agent)
 - `GET  /api/diagram/context` — latest canvas context (shapes/connections/summary).
 - `GET/POST /api/diagram/snapshot` — read/write the **active** diagram's tldraw
   snapshot. POST body `{ id?, snapshot?, name? }`; the bridge autosaves here.
+  POST returns `409` while the target diagram has an active recording.
 - `POST /api/diagram/commands` — queue a command. Body `{ type, input?, diagramId? }`:
   - `createShape`  `{ type:'box'|'ellipse'|'text'|'note', x, y, w?, h?, label?, color?, fill? }`
   - `createConnection` `{ fromShapeId, toShapeId, label?, directional?, fromAnchor?, toAnchor?, color?, routing?:'straight'|'orthogonal' }`
@@ -115,7 +116,8 @@ diagramtalk/                       The skill (consumed by an external agent)
 - `POST /api/diagram/commands/[id]/result` — bridge reports outcome.
 - `POST/GET /api/diagram/render` — request a render / fetch bytes; `GET ?id=&meta=1`
   for status. `PUT` is the bridge upload. Formats png|svg.
-- `POST/GET /api/diagram/save` — request a save / poll `{ id, savedAt, request }`.
+- `POST/GET /api/diagram/save` — request a save / poll `{ id, savedAt, request }`
+  (`POST` returns `409` while the target diagram has an active recording).
 - `GET/POST /api/diagram/recordings` — list recordings / start recording the
   active or specified diagram.
 - `GET/PATCH /api/diagram/recordings/{id|active}` — read a recording / end it.
@@ -168,10 +170,16 @@ the collision-checked layout engine; `--dry-run` previews `overlaps` +
   browser bridge reports the command as applied, with `occurredAt` and
   `elapsedMs`. Data persists in `.diagramtalk/recordings/`. Starting a new
   recording closes any previous open recording before making the new one active.
+- **A recording freezes base diagram persistence.** Autosave and explicit
+  `/api/diagram/save` do not update a diagram while that diagram has an active
+  recording. During a run, persist visual state with `highlight`/`setStateTag`;
+  end the recording before structural edits that should become the saved
+  baseline.
 
 ## 8. Feature history (newest first)
 
-- `feature/state-tags` Dynamic state tags + timed recording facility (worktree branch).
+- Autosave/save freeze while a recording is active.
+- `2682688` Dynamic state tags + timed recording facility; sidebar can fully collapse.
 - `f603f47` Transient highlight command/API/CLI + Playwright e2e suite.
 - `9a1e87f` Explicit Save (UI button + `/api/diagram/save` + CLI `save`).
 - `2261d83` `setCamera` view command + `camera` CLI (fit / topLeft / absolute).

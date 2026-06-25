@@ -1,5 +1,6 @@
 import { getActiveDiagram } from '@/lib/diagramStore'
 import { getSaveRequest, getSavedAt, requestSave } from '@/lib/diagramSaveStore'
+import { getActiveRecordingForDiagram } from '@/lib/diagramRecordingStore'
 import type {
   RequestSaveResponse,
   SaveMetaResponse,
@@ -44,6 +45,17 @@ export async function POST(request: Request) {
 
   if (!id) {
     return Response.json({ error: 'No diagram to save.' }, { status: 404 })
+  }
+
+  const activeRecording = await getActiveRecordingForDiagram(id)
+  if (activeRecording) {
+    return Response.json(
+      {
+        error: 'Diagram save requests are disabled while a recording is active.',
+        recordingId: activeRecording.id,
+      },
+      { status: 409 },
+    )
   }
 
   const created = requestSave(id)
