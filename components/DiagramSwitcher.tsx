@@ -6,20 +6,26 @@ type DiagramSwitcherProps = {
   diagrams: DiagramSummary[]
   activeId: string | null
   busy: boolean
+  saveStatus: 'idle' | 'saving' | 'saved'
   onSelect: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
+  onSave: () => void
 }
 
 export function DiagramSwitcher({
   diagrams,
   activeId,
   busy,
+  saveStatus,
   onSelect,
   onCreate,
   onDelete,
+  onSave,
 }: DiagramSwitcherProps) {
   const activeDiagram = diagrams.find((diagram) => diagram.id === activeId) ?? null
+  const saveLabel =
+    saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : 'Save'
 
   return (
     <div className="diagramBar">
@@ -45,6 +51,15 @@ export function DiagramSwitcher({
       </span>
 
       <div className="diagramBarActions">
+        <button
+          className="diagramBarButton"
+          disabled={busy || saveStatus === 'saving' || !activeDiagram}
+          onClick={onSave}
+          title="Save the active diagram now"
+          type="button"
+        >
+          {saveLabel}
+        </button>
         <button
           className="diagramBarButton"
           disabled={busy}

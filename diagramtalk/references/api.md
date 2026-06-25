@@ -243,6 +243,20 @@ uploads it, and the result is cached per diagram id. Use the
 Renders need the app tab open; with no tab the request stays unfulfilled and
 `render` times out.
 
+### Save endpoints (`/api/diagram/save`)
+
+The canvas already autosaves on every change; these force an explicit save of
+the current canvas now and confirm it. Like render, it is pull-based: the bridge
+flushes the live snapshot.
+
+- `POST /api/diagram/save` — request a save. Body `{ "id"?: string }`
+  (defaults to the active diagram). Returns `{ id, requestedAt }` (202).
+- `GET /api/diagram/save?id=<id>` — save status:
+  `{ id, savedAt, request }`. Poll until `savedAt >= requestedAt`.
+
+Needs the app tab open (the bridge performs the save). CLI: `save [--diagram <id>]`.
+The UI's **Save** button (next to New/Delete) does the same flush directly.
+
 ## Practical Notes
 
 - If commands remain `pending`, open the DiagramTalk app in a browser so the bridge can apply them.

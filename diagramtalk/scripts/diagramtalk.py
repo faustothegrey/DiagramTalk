@@ -216,6 +216,30 @@ def cmd_camera(args):
     )
 
 
+def cmd_save(args):
+    # Ask the browser bridge to flush the current canvas now, then wait for the
+    # save to be recorded. The app tab must be open.
+    body = {"id": args.diagram} if args.diagram else {}
+    requested = request("POST", "/api/diagram/save", body)
+    diagram_id = requested["id"]
+    requested_at = requested["requestedAt"]
+
+    deadline = time.time() + args.timeout
+    saved_at = None
+    while True:
+        meta = request("GET", f"/api/diagram/save?id={diagram_id}")
+        saved_at = meta.get("savedAt")
+        if saved_at and saved_at >= requested_at:
+            break
+        if time.time() >= deadline:
+            raise SystemExit(
+                "Save timed out. Is the DiagramTalk app tab open so the bridge can save?"
+            )
+        time.sleep(args.interval)
+
+    print_json({"ok": True, "id": diagram_id, "savedAt": saved_at})
+
+
 def cmd_render(args):
     # Rendering is pull-based: ask the server to request a fresh render, wait for
     # the browser bridge to export and upload it, then download the bytes. The app
@@ -778,6 +802,14 @@ def build_parser():
     )
     camera.add_argument("--diagram", help="Target diagram id (default: active).")
     camera.set_defaults(func=cmd_camera)
+
+    save = subparsers.add_parser(
+        "save", help="Force-save the current canvas now (requires the app tab open)."
+    )
+    save.add_argument("--diagram", help="Target diagram id (default: active).")
+    save.add_argument("--timeout", type=float, default=15)
+    save.add_argument("--interval", type=float, default=1)
+    save.set_defaults(func=cmd_save)
 
     render = subparsers.add_parser(
         "render",

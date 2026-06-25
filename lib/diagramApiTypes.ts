@@ -212,6 +212,24 @@ export type UploadRenderResponse = {
   renderedAt: string
 }
 
+export type RequestSaveRequest = {
+  id?: string
+}
+
+export type RequestSaveResponse = {
+  id: string
+  requestedAt: string
+}
+
+export type SaveMetaResponse = {
+  id: string
+  savedAt: string | null
+  request: {
+    id: string
+    requestedAt: string
+  } | null
+}
+
 export type RenderMetaResponse = {
   id: string
   format: RenderFormat | null

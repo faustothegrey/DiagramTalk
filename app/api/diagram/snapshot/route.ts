@@ -2,6 +2,7 @@ import {
   getActiveDiagram,
   updateDiagram,
 } from '@/lib/diagramStore'
+import { markSaved } from '@/lib/diagramSaveStore'
 import type {
   GetDiagramSnapshotResponse,
   PublishDiagramSnapshotRequest,
@@ -57,6 +58,11 @@ export async function POST(request: Request) {
 
     if (!updated) {
       return Response.json({ error: 'Diagram not found.' }, { status: 404 })
+    }
+
+    // A snapshot save (not a name-only update) satisfies any pending save request.
+    if (payload.snapshot !== undefined) {
+      markSaved(targetId)
     }
 
     const response: PublishDiagramSnapshotResponse = { ok: true, updatedAt: updated.updatedAt }

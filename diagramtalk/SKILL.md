@@ -264,6 +264,14 @@ Note: `render` always exports the content's bounding box, so it does **not**
 reflect the camera/viewport framing — `camera` controls what a person sees in
 the app, not the rendered image.
 
+Force-save the current canvas now and wait for it to persist (the canvas also
+autosaves continuously, so this is an explicit checkpoint):
+
+```bash
+python3 scripts/diagramtalk.py save
+python3 scripts/diagramtalk.py save --diagram <id>
+```
+
 ## Important Constraints
 
 - Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`: with no app tab open the render request stays unfulfilled and the CLI times out.

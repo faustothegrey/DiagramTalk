@@ -73,9 +73,11 @@ export function DiagramWorkspace() {
     return Number.isFinite(stored) && stored > 0 ? clampPanelWidth(stored) : DEFAULT_PANEL_WIDTH
   })
   const [isResizing, setIsResizing] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
 
   const saveNameTimerRef = useRef<number | null>(null)
   const hasInitializedNameRef = useRef(false)
+  const saveStatusTimerRef = useRef<number | null>(null)
 
   const handleDiagramChange = useCallback((nextDiagram: DiagramContext) => {
     setDiagram(nextDiagram)
@@ -154,6 +156,37 @@ export function DiagramWorkspace() {
     }
   }, [activeId, diagramName, editor])
 
+  // Explicit "Save" — force-persist the current canvas now (in addition to the
+  // background autosave), with brief "Saving…/Saved" feedback.
+  const handleSaveDiagram = useCallback(async () => {
+    if (!editor || !activeId) return
+
+    if (saveStatusTimerRef.current) {
+      window.clearTimeout(saveStatusTimerRef.current)
+      saveStatusTimerRef.current = null
+    }
+    setSaveStatus('saving')
+
+    try {
+      const snapshot = getSnapshot(editor.store)
+      const response = await fetch('/api/diagram/snapshot', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ id: activeId, snapshot, name: diagramName?.trim() || null }),
+      })
+      if (!response.ok) throw new Error(`Save failed with ${response.status}.`)
+
+      setSaveStatus('saved')
+      saveStatusTimerRef.current = window.setTimeout(() => {
+        saveStatusTimerRef.current = null
+        setSaveStatus('idle')
+      }, 1600)
+    } catch (error) {
+      console.error('[DiagramWorkspace] Failed to save diagram.', error)
+      setSaveStatus('idle')
+    }
+  }, [activeId, diagramName, editor])
+
   useEffect(() => {
     let isDisposed = false
 
@@ -197,6 +230,9 @@ export function DiagramWorkspace() {
       isDisposed = true
       if (saveNameTimerRef.current) {
         window.clearTimeout(saveNameTimerRef.current)
+      }
+      if (saveStatusTimerRef.current) {
+        window.clearTimeout(saveStatusTimerRef.current)
       }
     }
   }, [loadRecord])
@@ -366,7 +402,9 @@ export function DiagramWorkspace() {
           diagrams={diagrams}
           onCreate={handleCreateDiagram}
           onDelete={handleDeleteDiagram}
+          onSave={handleSaveDiagram}
           onSelect={handleSelectDiagram}
+          saveStatus={saveStatus}
         />
         <div className="canvasFrame">
           <Tldraw

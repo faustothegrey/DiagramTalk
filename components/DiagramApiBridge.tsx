@@ -25,6 +25,7 @@ import type {
   ListDiagramCommandsResponse,
   RenderFormat,
   RenderMetaResponse,
+  SaveMetaResponse,
   SetCameraCommand,
 } from '@/lib/diagramApiTypes'
 import type { DiagramContext } from '@/lib/types'
@@ -43,6 +44,7 @@ const POLL_INTERVAL_MS = 1500
 const PUBLISH_DEBOUNCE_MS = 300
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 800
 const RENDER_POLL_INTERVAL_MS = 1000
+const SAVE_POLL_INTERVAL_MS = 1000
 
 export function DiagramApiBridge({
   editor,
@@ -59,6 +61,7 @@ export function DiagramApiBridge({
   // Guards against re-requesting a switch many times before React state catches
   // up: we ask the workspace to activate a target diagram at most once.
   const requestedActivationRef = useRef<string | null>(null)
+  const lastSaveRequestRef = useRef<string | null>(null)
 
   const publishContext = useCallback((context: DiagramContext) => {
     if (publishTimerRef.current) {
@@ -239,6 +242,56 @@ export function DiagramApiBridge({
       window.clearInterval(intervalId)
     }
   }, [diagramId, editor, onRequestActivate])
+
+  // Fulfill explicit save requests: flush the current canvas immediately (the
+  // snapshot route records savedAt, which clears the request).
+  useEffect(() => {
+    if (!diagramId) return
+
+    let isDisposed = false
+
+    async function pollSaveRequest() {
+      try {
+        const response = await fetch(`/api/diagram/save?id=${diagramId}`)
+        if (!response.ok) return
+
+        const meta = (await response.json()) as SaveMetaResponse
+        const saveRequest = meta.request
+
+        if (!saveRequest || lastSaveRequestRef.current === saveRequest.requestedAt) {
+          return
+        }
+
+        // Targets another diagram — switch to it (once); its bridge will save.
+        if (saveRequest.id !== diagramId) {
+          if (requestedActivationRef.current === null) {
+            requestedActivationRef.current = saveRequest.id
+            onRequestActivate(saveRequest.id)
+          }
+          return
+        }
+
+        lastSaveRequestRef.current = saveRequest.requestedAt
+        const snapshot = getSnapshot(editor.store)
+        await fetch('/api/diagram/snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: diagramId, snapshot, name: diagramName?.trim() || null }),
+        })
+      } catch (error) {
+        if (!isDisposed) {
+          console.error('[DiagramApiBridge] Failed to fulfill save request.', error)
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(pollSaveRequest, SAVE_POLL_INTERVAL_MS)
+
+    return () => {
+      isDisposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [diagramId, diagramName, editor, onRequestActivate])
 
   return null
 }
