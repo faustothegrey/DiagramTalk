@@ -12,7 +12,7 @@ import {
 import { DiagramApiBridge } from '@/components/DiagramApiBridge'
 import { ChatPanel } from '@/components/ChatPanel'
 import { DiagramSwitcher } from '@/components/DiagramSwitcher'
-import { DiagramHighlightOverlay } from '@/components/DiagramHighlightOverlay'
+import { DiagramCanvasOverlay } from '@/components/DiagramCanvasOverlay'
 import type {
   DiagramRecord,
   DiagramRecordResponse,
@@ -43,7 +43,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
 // Hide tldraw's floating style panel (the color/fill/size/font picker that pops
 // up next to a selected shape). Set a component to null to remove it.
 const tldrawComponents: TLComponents = {
-  InFrontOfTheCanvas: DiagramHighlightOverlay,
+  InFrontOfTheCanvas: DiagramCanvasOverlay,
   StylePanel: null,
 }
 

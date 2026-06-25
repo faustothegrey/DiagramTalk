@@ -33,6 +33,7 @@ SHAPE_COLORS = [
 SHAPE_FILLS = ["none", "semi", "solid", "pattern"]
 CONNECTION_ANCHORS = ["top", "bottom", "left", "right", "center"]
 HIGHLIGHT_COLORS = ["yellow", "blue", "green", "red", "violet"]
+STATE_TAG_COLORS = ["blue", "green", "yellow", "red", "violet", "grey"]
 
 LAYOUT_DEFAULTS = {
     "originX": 80,
@@ -231,6 +232,55 @@ def cmd_highlight(args):
             "POST",
             "/api/diagram/commands",
             with_diagram({"type": "highlight", "input": input_payload}, args.diagram),
+        )
+    )
+
+
+def cmd_tag(args):
+    input_payload = {"tagId": args.tag_id}
+    if args.clear:
+        input_payload["clear"] = True
+    else:
+        if not args.shape_id or not args.label:
+            raise SystemExit("tag: pass <shape-id> <label>, or use --clear.")
+        input_payload["shapeId"] = args.shape_id
+        input_payload["label"] = args.label
+        if args.color:
+            input_payload["color"] = args.color
+
+    print_json(
+        request(
+            "POST",
+            "/api/diagram/commands",
+            with_diagram({"type": "setStateTag", "input": input_payload}, args.diagram),
+        )
+    )
+
+
+def cmd_record_start(args):
+    body = {}
+    if args.diagram:
+        body["diagramId"] = args.diagram
+    if args.name:
+        body["name"] = args.name
+    print_json(request("POST", "/api/diagram/recordings", body))
+
+
+def cmd_record_list(_args):
+    print_json(request("GET", "/api/diagram/recordings"))
+
+
+def cmd_record_show(args):
+    print_json(request("GET", f"/api/diagram/recordings/{args.id}"))
+
+
+def cmd_record_end(args):
+    recording_id = args.id or "active"
+    print_json(
+        request(
+            "PATCH",
+            f"/api/diagram/recordings/{recording_id}",
+            {},
         )
     )
 
@@ -836,6 +886,47 @@ def build_parser():
     highlight.add_argument("--padding", type=float, help="Extra screen px around each element.")
     highlight.add_argument("--diagram", help="Target diagram id (default: active).")
     highlight.set_defaults(func=cmd_highlight)
+
+    tag = subparsers.add_parser(
+        "tag",
+        help="Set or clear a dynamic state tag on a box shape. Needs the app tab open.",
+    )
+    tag.add_argument("shape_id", nargs="?", help="Target box shape id (bare or shape:*).")
+    tag.add_argument("label", nargs="?", help="Tag text to show in the top-right corner.")
+    tag.add_argument(
+        "--tag-id",
+        default="agent",
+        help="Logical marker id; setting the same id elsewhere moves it (default: agent).",
+    )
+    tag.add_argument("--color", choices=STATE_TAG_COLORS, default="blue")
+    tag.add_argument("--clear", action="store_true", help="Clear this --tag-id marker.")
+    tag.add_argument("--diagram", help="Target diagram id (default: active).")
+    tag.set_defaults(func=cmd_tag)
+
+    record = subparsers.add_parser(
+        "record",
+        help="Manage persisted recordings of highlight/tag events.",
+    )
+    record_subparsers = record.add_subparsers(required=True)
+
+    record_start = record_subparsers.add_parser(
+        "start",
+        help="Start recording highlight and state-tag events for a diagram.",
+    )
+    record_start.add_argument("--name", help="Optional recording name.")
+    record_start.add_argument("--diagram", help="Diagram id (default: active).")
+    record_start.set_defaults(func=cmd_record_start)
+
+    record_list = record_subparsers.add_parser("list", help="List recordings.")
+    record_list.set_defaults(func=cmd_record_list)
+
+    record_show = record_subparsers.add_parser("show", help="Show a recording with events.")
+    record_show.add_argument("id", help="Recording id, or 'active'.")
+    record_show.set_defaults(func=cmd_record_show)
+
+    record_end = record_subparsers.add_parser("end", help="End a recording.")
+    record_end.add_argument("id", nargs="?", help="Recording id (default: active).")
+    record_end.set_defaults(func=cmd_record_end)
 
     save = subparsers.add_parser(
         "save", help="Force-save the current canvas now (requires the app tab open)."

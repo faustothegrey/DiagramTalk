@@ -84,7 +84,23 @@ python3 scripts/diagramtalk.py commands --status pending
 python3 scripts/diagramtalk.py highlight shape:<id> --color blue
 ```
 
-8. **Confirm with your eyes, not just the report.** Verify the diagram context
+8. Use `tag` when an external runner needs to show a dynamic current-state
+   marker on a state-machine box. Reusing the same `--tag-id` moves the marker:
+
+```bash
+python3 scripts/diagramtalk.py tag shape:waiting "agent" --tag-id agent-1
+python3 scripts/diagramtalk.py tag shape:done "agent" --tag-id agent-1
+```
+
+9. Start a recording before a driver/test run when you need a persisted timed
+   log of highlights and state-tag movements, then end it when the run finishes:
+
+```bash
+python3 scripts/diagramtalk.py record start --name "Agent run"
+python3 scripts/diagramtalk.py record end
+```
+
+10. **Confirm with your eyes, not just the report.** Verify the diagram context
    and saved snapshot, and render the result to an actual image so you can see
    it — geometric checks and visual checks fail differently, so use both
    ([`PRINCIPLES.md`](PRINCIPLES.md)):
@@ -239,6 +255,39 @@ Allowed highlight colors are `yellow`, `blue`, `green`, `red`, and `violet`.
 Highlight commands fail if any id is missing. They do not change the snapshot,
 so they are safe for pointing at something during a review or handoff.
 
+Place a dynamic state tag on a box shape. This is for state-machine diagrams
+where an external app or test runner needs to show the agent's current state in
+the live tab. Tags are overlays, not saved diagram shapes:
+
+```bash
+python3 scripts/diagramtalk.py tag shape:waiting "agent" --tag-id agent-1 --color blue
+python3 scripts/diagramtalk.py tag shape:done "agent" --tag-id agent-1     # moves it
+python3 scripts/diagramtalk.py tag --tag-id agent-1 --clear
+```
+
+Allowed tag colors are `blue`, `green`, `yellow`, `red`, `violet`, and `grey`.
+Only box/rectangle shapes can receive state tags; ellipse/text/note/arrow
+targets fail. Tags do not change snapshots or renders.
+
+Record a driver/test run. Recordings persist a timed event log of bridge-applied
+`highlight` and `tag` commands for the recording's diagram:
+
+```bash
+python3 scripts/diagramtalk.py record start --name "M10 run" --diagram <id>
+python3 scripts/diagramtalk.py highlight shape:waiting --color yellow
+python3 scripts/diagramtalk.py tag shape:waiting agent --tag-id agent-1
+python3 scripts/diagramtalk.py tag shape:done agent --tag-id agent-1
+python3 scripts/diagramtalk.py record end
+python3 scripts/diagramtalk.py record list
+python3 scripts/diagramtalk.py record show <recording-id>
+```
+
+Each recorded event stores the original command input, the command id,
+`occurredAt`, and `elapsedMs` from the recording start. Recording is driven by
+the browser bridge's applied-command report, so it captures visible event order
+rather than just request enqueue order. A playback/replay endpoint is not
+implemented yet.
+
 Manage diagrams (list, create + activate, switch, rename, delete):
 
 ```bash
@@ -257,9 +306,9 @@ python3 scripts/diagramtalk.py layout spec.json --replace   # clear, then post t
 ```
 
 Target a diagram other than the active one with `--diagram <id>` (on `shape`,
-`connect`, `clear`, `layout`, `render`, `camera`, and `highlight`). The open app
-tab auto-switches to that diagram to apply the command and that diagram becomes
-active:
+`connect`, `clear`, `layout`, `render`, `camera`, `highlight`, and `tag`). The
+open app tab auto-switches to that diagram to apply the command and that diagram
+becomes active:
 
 ```bash
 python3 scripts/diagramtalk.py layout spec.json --replace --diagram <id>
@@ -297,7 +346,8 @@ python3 scripts/diagramtalk.py save --diagram <id>
 
 Run browser-level regression checks. The Playwright suite starts a separate app
 server on `localhost:3001`, drives Chromium, and verifies the command bridge,
-targeted diagrams, explicit save, render, camera, and highlight behavior:
+targeted diagrams, explicit save, render, camera, highlight, state-tag, and
+recording behavior:
 
 ```bash
 npm run test:e2e
@@ -305,8 +355,12 @@ npm run test:e2e
 
 ## Important Constraints
 
-- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`, `save`, and `highlight`: with no app tab open the request stays unfulfilled or the command stays pending.
+- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`, `save`, `highlight`, and `tag`: with no app tab open the request stays unfulfilled or the command stays pending.
 - Server command queue state is in memory and resets on Next.js restart.
+- Recording metadata and events persist to `.diagramtalk/recordings/`. Only one
+  recording is active; starting a new one closes any previous open recording.
+  Only events reported while a recording is active are captured. If commands
+  stay pending because no tab is open, no recording event is appended yet.
 - Diagrams persist locally, one file per diagram in `.diagramtalk/diagrams/<id>.json`, with the active pointer in `.diagramtalk/index.json`. Only the active diagram is loaded in the editor and acted on by commands.
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
 - Use stable caller-provided IDs when generating diagrams so later commands can connect to known shapes.

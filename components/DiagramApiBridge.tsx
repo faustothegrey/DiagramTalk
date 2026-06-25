@@ -19,6 +19,7 @@ import {
 } from 'tldraw'
 import { getCurrentDiagramContext } from '@/lib/diagramContext'
 import { DIAGRAM_HIGHLIGHT_EVENT } from '@/lib/diagramHighlight'
+import { DIAGRAM_STATE_TAG_EVENT } from '@/lib/diagramStateTags'
 import type {
   CreateConnectionCommand,
   CreateShapeCommand,
@@ -29,6 +30,7 @@ import type {
   RenderMetaResponse,
   SaveMetaResponse,
   SetCameraCommand,
+  SetStateTagCommand,
 } from '@/lib/diagramApiTypes'
 import type { DiagramContext } from '@/lib/types'
 
@@ -331,6 +333,11 @@ function applyDiagramCommand(editor: Editor, command: DiagramCommand) {
     return
   }
 
+  if (command.type === 'setStateTag') {
+    applySetStateTagCommand(editor, command)
+    return
+  }
+
   applyCreateConnectionCommand(editor, command)
 }
 
@@ -359,6 +366,55 @@ function applyHighlightCommand(editor: Editor, command: HighlightCommand) {
       },
     }),
   )
+}
+
+function applySetStateTagCommand(editor: Editor, command: SetStateTagCommand) {
+  const tagId = command.input.tagId?.trim() || 'agent'
+
+  if (command.input.clear === true) {
+    window.dispatchEvent(
+      new CustomEvent(DIAGRAM_STATE_TAG_EVENT, {
+        detail: { clear: true, tagId },
+      }),
+    )
+    return
+  }
+
+  if (!command.input.shapeId) {
+    throw new Error('State tag shapeId is required.')
+  }
+
+  const shapeId = toShapeId(command.input.shapeId)
+  const shape = editor.getShape(shapeId)
+  if (!shape) {
+    throw new Error(`Shape not found: ${shapeId}`)
+  }
+
+  if (!isBoxShape(shape)) {
+    throw new Error(`State tag target must be a box shape: ${shapeId}`)
+  }
+
+  const label = command.input.label?.trim()
+  if (!label) {
+    throw new Error('State tag label is required.')
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(DIAGRAM_STATE_TAG_EVENT, {
+      detail: {
+        clear: false,
+        tagId,
+        shapeId,
+        label,
+        color: command.input.color ?? 'blue',
+      },
+    }),
+  )
+}
+
+function isBoxShape(shape: { type: string; props: unknown }) {
+  const props = shape.props as { geo?: unknown }
+  return shape.type === 'geo' && props.geo === 'rectangle'
 }
 
 // Camera is view-only: it never creates, moves, or deletes shapes.
