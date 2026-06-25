@@ -1,4 +1,5 @@
 import type { DiagramContext } from './types'
+import type { HighlightColor } from './diagramHighlight'
 
 export type DiagramSnapshot = unknown
 
@@ -63,6 +64,13 @@ export type SetCameraInput =
   | { mode: 'topLeft'; margin?: number; zoom?: number }
   | { mode: 'absolute'; x: number; y: number; zoom: number }
 
+export type HighlightInput = {
+  ids: string[]
+  color?: HighlightColor
+  durationMs?: number
+  padding?: number
+}
+
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'
 
 type DiagramCommandBase = {
@@ -96,11 +104,17 @@ export type SetCameraCommand = DiagramCommandBase & {
   input: SetCameraInput
 }
 
+export type HighlightCommand = DiagramCommandBase & {
+  type: 'highlight'
+  input: HighlightInput
+}
+
 export type DiagramCommand =
   | CreateShapeCommand
   | CreateConnectionCommand
   | ClearDiagramCommand
   | SetCameraCommand
+  | HighlightCommand
 
 export type GetDiagramContextResponse = {
   context: DiagramContext | null
@@ -136,6 +150,11 @@ export type CreateDiagramCommandRequest =
   | {
       type: 'setCamera'
       input: SetCameraInput
+      diagramId?: string
+    }
+  | {
+      type: 'highlight'
+      input: HighlightInput
       diagramId?: string
     }
 

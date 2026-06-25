@@ -13,6 +13,8 @@ pnpm-debug.log*
 *.tsbuildinfo
 .diagramtalk/
 .claude/
+playwright-report/
+test-results/
 
 # Python
 __pycache__/

@@ -101,6 +101,80 @@ textarea {
   min-height: 0;
 }
 
+.diagramHighlightLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.diagramHighlightPulse {
+  position: absolute;
+  border: 3px solid var(--diagram-highlight-stroke);
+  border-radius: 10px;
+  background: var(--diagram-highlight-fill);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.82),
+    0 0 24px var(--diagram-highlight-glow);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+  transform-origin: center;
+  animation: diagramHighlightPulse var(--diagram-highlight-duration, 1600ms) ease-out forwards;
+}
+
+.diagramHighlightPulseYellow {
+  --diagram-highlight-stroke: #f2c94c;
+  --diagram-highlight-fill: rgba(242, 201, 76, 0.14);
+  --diagram-highlight-glow: rgba(242, 201, 76, 0.52);
+}
+
+.diagramHighlightPulseBlue {
+  --diagram-highlight-stroke: #2f80ed;
+  --diagram-highlight-fill: rgba(47, 128, 237, 0.12);
+  --diagram-highlight-glow: rgba(47, 128, 237, 0.48);
+}
+
+.diagramHighlightPulseGreen {
+  --diagram-highlight-stroke: #219653;
+  --diagram-highlight-fill: rgba(33, 150, 83, 0.12);
+  --diagram-highlight-glow: rgba(33, 150, 83, 0.46);
+}
+
+.diagramHighlightPulseRed {
+  --diagram-highlight-stroke: #eb5757;
+  --diagram-highlight-fill: rgba(235, 87, 87, 0.12);
+  --diagram-highlight-glow: rgba(235, 87, 87, 0.48);
+}
+
+.diagramHighlightPulseViolet {
+  --diagram-highlight-stroke: #7b61ff;
+  --diagram-highlight-fill: rgba(123, 97, 255, 0.12);
+  --diagram-highlight-glow: rgba(123, 97, 255, 0.46);
+}
+
+@keyframes diagramHighlightPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  62% {
+    opacity: 0.92;
+    transform: scale(1.045);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
 .diagramBar {
   display: flex;
   align-items: center;

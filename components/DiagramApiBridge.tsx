@@ -18,10 +18,12 @@ import {
   type TLTextShape,
 } from 'tldraw'
 import { getCurrentDiagramContext } from '@/lib/diagramContext'
+import { DIAGRAM_HIGHLIGHT_EVENT } from '@/lib/diagramHighlight'
 import type {
   CreateConnectionCommand,
   CreateShapeCommand,
   DiagramCommand,
+  HighlightCommand,
   ListDiagramCommandsResponse,
   RenderFormat,
   RenderMetaResponse,
@@ -324,6 +326,11 @@ function applyDiagramCommand(editor: Editor, command: DiagramCommand) {
     return
   }
 
+  if (command.type === 'highlight') {
+    applyHighlightCommand(editor, command)
+    return
+  }
+
   applyCreateConnectionCommand(editor, command)
 }
 
@@ -332,6 +339,26 @@ function applyClearDiagramCommand(editor: Editor) {
   if (ids.length > 0) {
     editor.deleteShapes(ids)
   }
+}
+
+function applyHighlightCommand(editor: Editor, command: HighlightCommand) {
+  const ids = [...new Set(command.input.ids.map(toShapeId))]
+  const missingIds = ids.filter((id) => !editor.getShape(id))
+
+  if (missingIds.length > 0) {
+    throw new Error(`Shape not found: ${missingIds.join(', ')}`)
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(DIAGRAM_HIGHLIGHT_EVENT, {
+      detail: {
+        ids,
+        color: command.input.color ?? 'yellow',
+        durationMs: command.input.durationMs ?? 1600,
+        padding: command.input.padding ?? 10,
+      },
+    }),
+  )
 }
 
 // Camera is view-only: it never creates, moves, or deletes shapes.

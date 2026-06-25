@@ -217,6 +217,15 @@ Check the active diagram's saved snapshot metadata/content:
 python3 scripts/diagramtalk.py snapshot
 ```
 
+Highlight existing elements in the live app by id (view-only, transient, not
+saved). Use ids from `context.shapes`; connection `arrowId` values are also
+shape ids and can be highlighted:
+
+```bash
+python3 scripts/diagramtalk.py highlight shape:example-node
+python3 scripts/diagramtalk.py highlight shape:example-node shape:example-edge --color blue
+```
+
 Manage diagrams (list, create + activate, switch, rename, delete):
 
 ```bash
@@ -235,8 +244,9 @@ python3 scripts/diagramtalk.py layout spec.json --replace   # clear, then post t
 ```
 
 Target a diagram other than the active one with `--diagram <id>` (on `shape`,
-`connect`, `clear`, `layout`, `render`). The open app tab auto-switches to that
-diagram to apply the edit and that diagram becomes active:
+`connect`, `clear`, `layout`, `render`, `camera`, and `highlight`). The open app
+tab auto-switches to that diagram to apply the command and that diagram becomes
+active:
 
 ```bash
 python3 scripts/diagramtalk.py layout spec.json --replace --diagram <id>
@@ -280,6 +290,9 @@ python3 scripts/diagramtalk.py save --diagram <id>
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
 - Use stable caller-provided IDs when generating diagrams so later commands can connect to known shapes.
 - Shape IDs accepted by the API may be bare IDs like `agent-a` or full tldraw IDs like `shape:agent-a`.
+- Every visible element has a tldraw shape id. Connections are arrow shapes, so
+  use their `arrowId` from `context.connections` (or matching `context.shapes`
+  entry) when highlighting or addressing a connection.
 
 ## Reference
 

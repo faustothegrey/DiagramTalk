@@ -33,6 +33,12 @@ Useful fields:
 - `context.selectedConnections`
 - `context.summary`
 
+Every visible canvas element is addressable by id. Normal shapes appear in
+`context.shapes[*].id`; connections are arrow shapes, so each connection's
+`arrowId` is also present in `context.shapes` and can be used anywhere a shape
+id is accepted. The API accepts either full tldraw ids (`shape:node-a`) or bare
+ids (`node-a`) for commands that resolve shapes.
+
 ### `GET /api/diagram/snapshot`
 
 Returns the **active** diagram's saved tldraw snapshot, along with its `id`,
@@ -157,6 +163,32 @@ queued and applied by the browser bridge, so it runs in order relative to any
 `createShape`/`createConnection` commands queued after it (post `clearDiagram`
 first to replace the canvas rather than merge onto it).
 
+Highlight one or more existing elements in the live editor:
+
+```json
+{
+  "type": "highlight",
+  "input": {
+    "ids": ["shape:node-a", "shape:edge-a-b"],
+    "color": "yellow",
+    "durationMs": 1600,
+    "padding": 10
+  }
+}
+```
+
+`highlight` validates that every id resolves to an existing tldraw shape, then
+shows a short pulse animation in the browser tab. It is view-only and transient:
+it does not mutate the diagram, save to the snapshot, or appear in renders.
+
+Optional highlight fields:
+
+- `color`: `yellow` (default), `blue`, `green`, `red`, or `violet`.
+- `durationMs`: animation duration in milliseconds, from 100 to 10000
+  (default 1600).
+- `padding`: extra screen pixels around the highlighted element, from 0 to 80
+  (default 10).
+
 **Targeting a specific diagram.** Any command may include an optional
 `diagramId` (validated to exist, else `404`) to act on a diagram other than the
 active one:
@@ -171,7 +203,7 @@ applies the command, and saves — so edits land on the right diagram without a
 separate `use` call. (tldraw runs only in the browser, so this still needs an
 app tab open; the targeted diagram becomes the active one afterward.) The CLI
 exposes this as `--diagram <id>` on `shape`, `connect`, `clear`, `layout`,
-`render`, and `camera`.
+`render`, `camera`, and `highlight`.
 
 Move the camera (view only — never mutates or persists shapes):
 

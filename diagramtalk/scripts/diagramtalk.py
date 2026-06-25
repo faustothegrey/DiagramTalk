@@ -32,6 +32,7 @@ SHAPE_COLORS = [
 ]
 SHAPE_FILLS = ["none", "semi", "solid", "pattern"]
 CONNECTION_ANCHORS = ["top", "bottom", "left", "right", "center"]
+HIGHLIGHT_COLORS = ["yellow", "blue", "green", "red", "violet"]
 
 LAYOUT_DEFAULTS = {
     "originX": 80,
@@ -212,6 +213,24 @@ def cmd_camera(args):
             "POST",
             "/api/diagram/commands",
             with_diagram({"type": "setCamera", "input": inp}, args.diagram),
+        )
+    )
+
+
+def cmd_highlight(args):
+    input_payload = {"ids": args.ids}
+    if args.color:
+        input_payload["color"] = args.color
+    if args.duration is not None:
+        input_payload["durationMs"] = args.duration
+    if args.padding is not None:
+        input_payload["padding"] = args.padding
+
+    print_json(
+        request(
+            "POST",
+            "/api/diagram/commands",
+            with_diagram({"type": "highlight", "input": input_payload}, args.diagram),
         )
     )
 
@@ -802,6 +821,21 @@ def build_parser():
     )
     camera.add_argument("--diagram", help="Target diagram id (default: active).")
     camera.set_defaults(func=cmd_camera)
+
+    highlight = subparsers.add_parser(
+        "highlight",
+        help="Pulse-highlight one or more existing canvas shape ids. Needs the app tab open.",
+    )
+    highlight.add_argument("ids", nargs="+", help="Shape ids to highlight (bare or shape:*).")
+    highlight.add_argument("--color", choices=HIGHLIGHT_COLORS, default="yellow")
+    highlight.add_argument(
+        "--duration",
+        type=float,
+        help="Animation duration in milliseconds (default: 1600).",
+    )
+    highlight.add_argument("--padding", type=float, help="Extra screen px around each element.")
+    highlight.add_argument("--diagram", help="Target diagram id (default: active).")
+    highlight.set_defaults(func=cmd_highlight)
 
     save = subparsers.add_parser(
         "save", help="Force-save the current canvas now (requires the app tab open)."

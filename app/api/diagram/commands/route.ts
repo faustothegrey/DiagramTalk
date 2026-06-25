@@ -58,6 +58,8 @@ export async function POST(request: Request) {
     command = { ...baseCommand, type: 'createConnection', input: payload.input }
   } else if (payload.type === 'setCamera') {
     command = { ...baseCommand, type: 'setCamera', input: payload.input }
+  } else if (payload.type === 'highlight') {
+    command = { ...baseCommand, type: 'highlight', input: payload.input }
   } else {
     command = { ...baseCommand, type: 'clearDiagram' }
   }
@@ -100,6 +102,10 @@ function isCreateDiagramCommandRequest(
     return isSetCameraInput((maybeRequest as { input?: unknown }).input)
   }
 
+  if (maybeRequest.type === 'highlight') {
+    return isHighlightInput((maybeRequest as { input?: unknown }).input)
+  }
+
   return false
 }
 
@@ -140,6 +146,7 @@ const SHAPE_COLORS = new Set([
 const SHAPE_FILLS = new Set(['none', 'semi', 'solid', 'pattern'])
 const CONNECTION_ANCHORS = new Set(['top', 'bottom', 'left', 'right', 'center'])
 const CONNECTION_ROUTINGS = new Set(['straight', 'orthogonal'])
+const HIGHLIGHT_COLORS = new Set(['yellow', 'blue', 'green', 'red', 'violet'])
 
 function isOptionalEnum(value: unknown, allowed: Set<string>) {
   return value === undefined || (typeof value === 'string' && allowed.has(value))
@@ -185,5 +192,22 @@ function isCreateConnectionInput(value: unknown) {
     isOptionalEnum(input.toAnchor, CONNECTION_ANCHORS) &&
     isOptionalEnum(input.color, SHAPE_COLORS) &&
     isOptionalEnum(input.routing, CONNECTION_ROUTINGS)
+  )
+}
+
+function isHighlightInput(value: unknown) {
+  if (!value || typeof value !== 'object') return false
+
+  const input = value as Record<string, unknown>
+  const isNumberInRange = (v: unknown, min: number, max: number) =>
+    typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+
+  return (
+    Array.isArray(input.ids) &&
+    input.ids.length > 0 &&
+    input.ids.every((id) => typeof id === 'string' && id.length > 0) &&
+    isOptionalEnum(input.color, HIGHLIGHT_COLORS) &&
+    (input.durationMs === undefined || isNumberInRange(input.durationMs, 100, 10000)) &&
+    (input.padding === undefined || isNumberInRange(input.padding, 0, 80))
   )
 }
