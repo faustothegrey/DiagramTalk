@@ -76,7 +76,15 @@ python3 scripts/diagramtalk.py context
 python3 scripts/diagramtalk.py commands --status pending
 ```
 
-7. **Confirm with your eyes, not just the report.** Verify the diagram context
+7. Use `highlight` when you need to direct a human's attention to specific
+   elements in the live tab without changing the diagram. It is a transient
+   overlay, not a saved shape:
+
+```bash
+python3 scripts/diagramtalk.py highlight shape:<id> --color blue
+```
+
+8. **Confirm with your eyes, not just the report.** Verify the diagram context
    and saved snapshot, and render the result to an actual image so you can see
    it — geometric checks and visual checks fail differently, so use both
    ([`PRINCIPLES.md`](PRINCIPLES.md)):
@@ -224,7 +232,12 @@ shape ids and can be highlighted:
 ```bash
 python3 scripts/diagramtalk.py highlight shape:example-node
 python3 scripts/diagramtalk.py highlight shape:example-node shape:example-edge --color blue
+python3 scripts/diagramtalk.py highlight example-node --duration 2500 --padding 16
 ```
+
+Allowed highlight colors are `yellow`, `blue`, `green`, `red`, and `violet`.
+Highlight commands fail if any id is missing. They do not change the snapshot,
+so they are safe for pointing at something during a review or handoff.
 
 Manage diagrams (list, create + activate, switch, rename, delete):
 
@@ -282,9 +295,17 @@ python3 scripts/diagramtalk.py save
 python3 scripts/diagramtalk.py save --diagram <id>
 ```
 
+Run browser-level regression checks. The Playwright suite starts a separate app
+server on `localhost:3001`, drives Chromium, and verifies the command bridge,
+targeted diagrams, explicit save, render, camera, and highlight behavior:
+
+```bash
+npm run test:e2e
+```
+
 ## Important Constraints
 
-- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`: with no app tab open the render request stays unfulfilled and the CLI times out.
+- Mutating commands require an open browser session running DiagramTalk; the browser bridge applies queued commands through tldraw. The same is true of `render`, `save`, and `highlight`: with no app tab open the request stays unfulfilled or the command stays pending.
 - Server command queue state is in memory and resets on Next.js restart.
 - Diagrams persist locally, one file per diagram in `.diagramtalk/diagrams/<id>.json`, with the active pointer in `.diagramtalk/index.json`. Only the active diagram is loaded in the editor and acted on by commands.
 - The `.diagramtalk/` directory is git-ignored; do not commit user diagrams unless explicitly asked.
@@ -293,6 +314,9 @@ python3 scripts/diagramtalk.py save --diagram <id>
 - Every visible element has a tldraw shape id. Connections are arrow shapes, so
   use their `arrowId` from `context.connections` (or matching `context.shapes`
   entry) when highlighting or addressing a connection.
+- Playwright output is ignored (`test-results/`, `playwright-report/`). Keep
+  `next-env.d.ts` generated route-path flips out of commits unless the user asks
+  for build metadata changes.
 
 ## Reference
 

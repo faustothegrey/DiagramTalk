@@ -409,6 +409,32 @@ textarea {
   text-transform: uppercase;
 }
 
+.automationNotes {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.automationNotes p {
+  margin: 0;
+}
+
+.automationNotes code {
+  display: block;
+  overflow-x: auto;
+  border: 1px solid rgba(31, 35, 40, 0.1);
+  border-radius: 6px;
+  padding: 7px 8px;
+  color: var(--foreground);
+  background: #fafaf8;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .selectionSummary {
   padding: 14px 18px;
   border-bottom: 1px solid var(--panel-border);

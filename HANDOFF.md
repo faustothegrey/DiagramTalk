@@ -16,15 +16,16 @@ skill). It runs locally at `http://localhost:3000`.
 Two clients of the same app:
 - **Human**: draws on the canvas, uses the chat panel, switches/saves diagrams.
 - **Agent** (e.g. Codex/Claude via the skill): posts commands to create shapes,
-  connect them, clear, frame the camera, render to an image, save, and manage
-  multiple diagrams — all over REST.
+  connect them, clear, frame the camera, render to an image, save,
+  pulse-highlight existing elements, and manage multiple diagrams — all over REST.
 
 ## 2. Stack & how to run
 
 - Next.js `^16` (App Router), React `^19`, TypeScript, **tldraw `^5.1.1`**,
   `pdf-lib` (PDF export). LLM via OpenRouter.
 - Scripts: `npm run dev`, `npm run build`, `npm run typecheck` (`tsc --noEmit`),
-  `npm run lint` (`eslint .`).
+  `npm run lint` (`eslint .`), `npm run test:e2e` (Playwright/Chromium on
+  `localhost:3001` by default).
 - Env: copy `.env.example` → `.env`; set `OPENROUTER_API_KEY` (used by chat/ask
   only — the diagram command/render/save APIs do **not** need it).
 - CLI: `python3 diagramtalk/scripts/diagramtalk.py <verb>` (stdlib only, no deps).
@@ -69,6 +70,7 @@ components/
                                    Mounts <Tldraw key={activeId} components={{StylePanel:null}}>.
   DiagramApiBridge.tsx             THE BRIDGE. Runs inside tldraw. Polls commands/render/save,
                                    applies them via Editor, autosaves snapshot + publishes context.
+  DiagramHighlightOverlay.tsx      Transient in-front-of-canvas pulse overlay for highlight commands.
   DiagramSwitcher.tsx              Top bar: diagram dropdown + Save / + New / Delete buttons.
   ChatPanel.tsx                    Chat tab + Commands tab (name, PDF/SVG export).
   SelectionSummary.tsx            Selection readout in the chat panel.
@@ -80,6 +82,7 @@ lib/
   diagramSaveStore.ts              In-memory: save request + savedAt timestamps
   diagramContext.ts                Builds normalized DiagramContext from the tldraw editor
   diagramExport.ts                 Client-side PDF/SVG export (editor.toImage / getSvgString)
+  diagramHighlight.ts              Shared event name/types for transient highlight pulses.
   openrouter.ts, types.ts          LLM client + shared chat/context types
 diagramtalk/                       The skill (consumed by an external agent)
   SKILL.md                         Workflow + operations (the entry point for the agent)
@@ -101,6 +104,7 @@ diagramtalk/                       The skill (consumed by an external agent)
   - `createConnection` `{ fromShapeId, toShapeId, label?, directional?, fromAnchor?, toAnchor?, color?, routing?:'straight'|'orthogonal' }`
   - `clearDiagram`  (deletes all shapes on the page)
   - `setCamera`     `{ mode:'fit', padding? } | { mode:'topLeft', margin?, zoom? } | { mode:'absolute', x, y, zoom } }` (view-only)
+  - `highlight`     `{ ids:string[], color?:'yellow'|'blue'|'green'|'red'|'violet', durationMs?, padding? }` (view-only transient pulse)
   - Optional `diagramId` targets a non-active diagram (validated; **auto-activate** — the open tab switches to it, applies, saves).
 - `GET  /api/diagram/commands?status=pending|applied|failed` — list queue.
 - `POST /api/diagram/commands/[id]/result` — bridge reports outcome.
@@ -115,12 +119,12 @@ diagramtalk/                       The skill (consumed by an external agent)
 ## 6. CLI verbs (`diagramtalk.py`)
 
 `context · snapshot · diagrams · new · use · rename · delete · commands · clear ·
-camera · save · render · shape · connect · layout · ask · wait`
+camera · highlight · save · render · shape · connect · layout · ask · wait`
 
 Most mutating verbs accept `--diagram <id>` (auto-activate). `layout <spec>` runs
 the collision-checked layout engine; `--dry-run` previews `overlaps` +
 `arrowCrossings`, `--post` queues it, `--replace` clears first. `render --out f`,
-`save`, and `camera --fit|--top-left|--x --y --zoom` need an open tab.
+`save`, `highlight`, and `camera --fit|--top-left|--x --y --zoom` need an open tab.
 
 ## 7. Conventions & gotchas (learned the hard way — read these)
 
@@ -148,9 +152,13 @@ the collision-checked layout engine; `--dry-run` previews `overlaps` +
   layout engine's `find_arrow_crossings` checks orthogonal edges along their
   routed (elbow) polyline so checker and renderer agree. Orthogonal alone does NOT
   dodge intermediate boxes — pair it with gap-routing anchors (e.g. bottom→bottom).
+- **Highlight is not a tldraw highlighter shape.** It is a transient React overlay
+  in `InFrontOfTheCanvas`, addressed by real shape ids. It never changes snapshots
+  or renders, and it fails if any requested id is missing.
 
 ## 8. Feature history (newest first)
 
+- `f603f47` Transient highlight command/API/CLI + Playwright e2e suite.
 - `9a1e87f` Explicit Save (UI button + `/api/diagram/save` + CLI `save`).
 - `2261d83` `setCamera` view command + `camera` CLI (fit / topLeft / absolute).
 - `3761e19` Orthogonal/elbow routing (`routing` on connections; engine routed-path check).
@@ -168,9 +176,10 @@ the collision-checked layout engine; `--dry-run` previews `overlaps` +
 - **Render-framing nice-to-have:** make `render` optionally reflect the camera
   viewport (e.g. `?mode=topLeft`) so "see" matches "frame". Not done — `render`
   exports shape bounds, so this needs exporting a viewport region (not cheap).
-- **Live-verification gaps:** camera framing, the elbow *render*, and the Save
-  round-trip were code-/static-verified but their *visual* behavior needs an open
-  tab. Engine logic (layout/crossings) is unit/dry-run testable headlessly.
+- **Live verification:** Playwright now covers command bridge shape/connection
+  creation, targeted diagram auto-activation, explicit save, PNG/SVG render,
+  camera movement, and transient highlight behavior. Use `npm run test:e2e`;
+  it starts a separate app server on port 3001.
 - **Housekeeping:** the remote branch `origin/task3-elbow-routing` is merged but
   not deleted.
 
@@ -185,8 +194,9 @@ the collision-checked layout engine; `--dry-run` previews `overlaps` +
   ```
   Editing files in the main checkout hot-reloads (disrupts) the owner's session.
 - **Verify** with `tsc --noEmit`, `eslint`, `python3 -m py_compile` in the worktree.
-  Live/visual checks need a browser tab — coordinate with the owner (they'll merge,
-  which hot-reloads their tab, or stop/restart the server for you).
+  Use `npm run test:e2e` for browser bridge/visual behavior; it runs against a
+  separate dev server on port 3001 and should not disturb the owner's port 3000
+  session.
 - **Commit/push only when asked.** Merging a branch to `main` updates the owner's
   working tree (hot-reload), so do it on request. Keep build churn out
   (`next-env.d.ts` dev/prod path flip; `__pycache__/`).

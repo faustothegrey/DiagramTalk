@@ -180,6 +180,8 @@ Highlight one or more existing elements in the live editor:
 `highlight` validates that every id resolves to an existing tldraw shape, then
 shows a short pulse animation in the browser tab. It is view-only and transient:
 it does not mutate the diagram, save to the snapshot, or appear in renders.
+Because it is applied by the browser bridge, the app tab must be open. Missing
+ids fail the command with `Shape not found: ...`.
 
 Optional highlight fields:
 
@@ -288,6 +290,21 @@ flushes the live snapshot.
 
 Needs the app tab open (the bridge performs the save). CLI: `save [--diagram <id>]`.
 The UI's **Save** button (next to New/Delete) does the same flush directly.
+
+### Browser regression checks
+
+The app includes Playwright e2e coverage for browser-only behavior:
+
+```bash
+npm run test:e2e
+```
+
+The suite starts a separate dev server on `http://localhost:3001` by default and
+drives Chromium. It verifies that the browser bridge applies shape/connection
+commands, targeted diagram commands auto-activate the correct diagram, explicit
+save persists a snapshot, PNG/SVG renders are non-empty, camera commands move
+the live viewport, and highlight commands are transient and fail cleanly for
+missing ids.
 
 ## Practical Notes
 
