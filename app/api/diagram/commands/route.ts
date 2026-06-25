@@ -60,6 +60,8 @@ export async function POST(request: Request) {
     command = { ...baseCommand, type: 'setCamera', input: payload.input }
   } else if (payload.type === 'highlight') {
     command = { ...baseCommand, type: 'highlight', input: payload.input }
+  } else if (payload.type === 'setStateTag') {
+    command = { ...baseCommand, type: 'setStateTag', input: payload.input }
   } else {
     command = { ...baseCommand, type: 'clearDiagram' }
   }
@@ -106,6 +108,10 @@ function isCreateDiagramCommandRequest(
     return isHighlightInput((maybeRequest as { input?: unknown }).input)
   }
 
+  if (maybeRequest.type === 'setStateTag') {
+    return isSetStateTagInput((maybeRequest as { input?: unknown }).input)
+  }
+
   return false
 }
 
@@ -147,6 +153,7 @@ const SHAPE_FILLS = new Set(['none', 'semi', 'solid', 'pattern'])
 const CONNECTION_ANCHORS = new Set(['top', 'bottom', 'left', 'right', 'center'])
 const CONNECTION_ROUTINGS = new Set(['straight', 'orthogonal'])
 const HIGHLIGHT_COLORS = new Set(['yellow', 'blue', 'green', 'red', 'violet'])
+const STATE_TAG_COLORS = new Set(['blue', 'green', 'yellow', 'red', 'violet', 'grey'])
 
 function isOptionalEnum(value: unknown, allowed: Set<string>) {
   return value === undefined || (typeof value === 'string' && allowed.has(value))
@@ -209,5 +216,34 @@ function isHighlightInput(value: unknown) {
     isOptionalEnum(input.color, HIGHLIGHT_COLORS) &&
     (input.durationMs === undefined || isNumberInRange(input.durationMs, 100, 10000)) &&
     (input.padding === undefined || isNumberInRange(input.padding, 0, 80))
+  )
+}
+
+function isSetStateTagInput(value: unknown) {
+  if (!value || typeof value !== 'object') return false
+
+  const input = value as Record<string, unknown>
+  const hasOptionalTagId = input.tagId === undefined || typeof input.tagId === 'string'
+  const hasOptionalShapeId = input.shapeId === undefined || typeof input.shapeId === 'string'
+  const hasOptionalLabel = input.label === undefined || typeof input.label === 'string'
+  const hasOptionalClear = input.clear === undefined || typeof input.clear === 'boolean'
+
+  if (!hasOptionalTagId || !hasOptionalShapeId || !hasOptionalLabel || !hasOptionalClear) {
+    return false
+  }
+
+  if (!isOptionalEnum(input.color, STATE_TAG_COLORS)) {
+    return false
+  }
+
+  if (input.clear === true) {
+    return true
+  }
+
+  return (
+    typeof input.shapeId === 'string' &&
+    input.shapeId.length > 0 &&
+    typeof input.label === 'string' &&
+    input.label.trim().length > 0
   )
 }

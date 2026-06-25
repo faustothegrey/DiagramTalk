@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 
 type DiagramCommand = {
   id: string
@@ -26,6 +27,10 @@ type DiagramContextResponse = {
 
 function toShapeId(id: string) {
   return id.startsWith('shape:') ? id : `shape:${id}`
+}
+
+function uniqueId(prefix: string) {
+  return `${prefix}-${randomUUID()}`
 }
 
 async function createDiagram(page: Page, name: string) {
@@ -126,12 +131,12 @@ async function getSnapshotShapeIds(page: Page) {
 test.describe.configure({ mode: 'serial' })
 
 test('creates shapes and connections through the browser bridge', async ({ page }) => {
-  await createDiagram(page, `Playwright Context ${Date.now()}`)
+  await createDiagram(page, uniqueId('Playwright Context'))
   await openWorkspace(page)
 
-  const sourceId = `pw-source-${Date.now()}`
-  const targetId = `pw-target-${Date.now()}`
-  const edgeId = `pw-edge-${Date.now()}`
+  const sourceId = uniqueId('pw-source')
+  const targetId = uniqueId('pw-target')
+  const edgeId = uniqueId('pw-edge')
 
   for (const [id, x] of [
     [sourceId, 120],
@@ -184,11 +189,11 @@ test('creates shapes and connections through the browser bridge', async ({ page 
 })
 
 test('auto-activates a targeted diagram before applying a command', async ({ page }) => {
-  const targetDiagramId = await createDiagram(page, `Playwright Target ${Date.now()}`)
-  await createDiagram(page, `Playwright Other ${Date.now()}`)
+  const targetDiagramId = await createDiagram(page, uniqueId('Playwright Target'))
+  await createDiagram(page, uniqueId('Playwright Other'))
   await openWorkspace(page)
 
-  const shapeId = `pw-targeted-${Date.now()}`
+  const shapeId = uniqueId('pw-targeted')
   const command = await queueCommand(page, {
     type: 'createShape',
     diagramId: targetDiagramId,
@@ -215,10 +220,10 @@ test('auto-activates a targeted diagram before applying a command', async ({ pag
 })
 
 test('explicit save persists the current snapshot', async ({ page }) => {
-  const diagramId = await createDiagram(page, `Playwright Save ${Date.now()}`)
+  const diagramId = await createDiagram(page, uniqueId('Playwright Save'))
   await openWorkspace(page)
 
-  const shapeId = `pw-save-${Date.now()}`
+  const shapeId = uniqueId('pw-save')
   const command = await queueCommand(page, {
     type: 'createShape',
     input: {
@@ -239,10 +244,10 @@ test('explicit save persists the current snapshot', async ({ page }) => {
 })
 
 test('renders non-empty PNG and SVG exports', async ({ page }) => {
-  const diagramId = await createDiagram(page, `Playwright Render ${Date.now()}`)
+  const diagramId = await createDiagram(page, uniqueId('Playwright Render'))
   await openWorkspace(page)
 
-  const shapeId = `pw-render-${Date.now()}`
+  const shapeId = uniqueId('pw-render')
   const command = await queueCommand(page, {
     type: 'createShape',
     input: {
@@ -269,13 +274,13 @@ test('renders non-empty PNG and SVG exports', async ({ page }) => {
 })
 
 test('camera commands change the live viewport transform', async ({ page }) => {
-  await createDiagram(page, `Playwright Camera ${Date.now()}`)
+  await createDiagram(page, uniqueId('Playwright Camera'))
   await openWorkspace(page)
 
   const shapeCommand = await queueCommand(page, {
     type: 'createShape',
     input: {
-      id: `pw-camera-${Date.now()}`,
+      id: uniqueId('pw-camera'),
       type: 'box',
       label: 'Camera target',
       x: 240,
@@ -309,10 +314,10 @@ test('camera commands change the live viewport transform', async ({ page }) => {
 })
 
 test('highlights existing shapes and fails cleanly for missing ids', async ({ page }) => {
-  const diagramId = await createDiagram(page, `Playwright Highlight ${Date.now()}`)
+  const diagramId = await createDiagram(page, uniqueId('Playwright Highlight'))
   await openWorkspace(page)
 
-  const shapeId = `pw-highlight-${Date.now()}`
+  const shapeId = uniqueId('pw-highlight')
   const createCommand = await queueCommand(page, {
     type: 'createShape',
     input: {
@@ -349,10 +354,230 @@ test('highlights existing shapes and fails cleanly for missing ids', async ({ pa
   const missingCommand = await queueCommand(page, {
     type: 'highlight',
     input: {
-      ids: [`missing-${Date.now()}`],
+      ids: [uniqueId('missing')],
     },
   })
   await waitForCommand(page, missingCommand.id, 'failed')
   const failedCommand = await getCommand(page, missingCommand.id)
   expect(failedCommand?.error).toContain('Shape not found')
+})
+
+test('state tags move between box states and stay out of snapshots', async ({ page }) => {
+  const diagramId = await createDiagram(page, uniqueId('Playwright State Tag'))
+  await openWorkspace(page)
+
+  const waitingId = uniqueId('pw-waiting')
+  const doneId = uniqueId('pw-done')
+  const nonBoxId = uniqueId('pw-nonbox')
+
+  for (const shape of [
+    { id: waitingId, type: 'box', label: 'Waiting', x: 120 },
+    { id: doneId, type: 'box', label: 'Done', x: 420 },
+    { id: nonBoxId, type: 'ellipse', label: 'Actor', x: 720 },
+  ] as const) {
+    const command = await queueCommand(page, {
+      type: 'createShape',
+      input: {
+        id: shape.id,
+        type: shape.type,
+        label: shape.label,
+        x: shape.x,
+        y: 160,
+        w: 170,
+        h: 90,
+      },
+    })
+    await waitForCommand(page, command.id)
+  }
+
+  await requestSave(page, diagramId)
+  const beforeTagShapeIds = await getSnapshotShapeIds(page)
+
+  const firstTagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      shapeId: waitingId,
+      label: 'agent',
+      tagId: 'agent-1',
+      color: 'blue',
+    },
+  })
+  await waitForCommand(page, firstTagCommand.id)
+
+  const tag = page.locator('.diagramStateTag')
+  await expect(tag).toHaveText('agent')
+  await expect(tag).toBeVisible()
+  const firstBox = await tag.boundingBox()
+  expect(firstBox).not.toBeNull()
+
+  const moveTagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      shapeId: doneId,
+      label: 'agent',
+      tagId: 'agent-1',
+      color: 'green',
+    },
+  })
+  await waitForCommand(page, moveTagCommand.id)
+  await expect(tag).toHaveCount(1)
+
+  await expect
+    .poll(async () => {
+      const currentBox = await tag.boundingBox()
+      return currentBox && firstBox ? currentBox.x > firstBox.x + 100 : false
+    })
+    .toBe(true)
+
+  await requestSave(page, diagramId)
+  const afterTagShapeIds = await getSnapshotShapeIds(page)
+  expect(afterTagShapeIds.sort()).toEqual(beforeTagShapeIds.sort())
+
+  const nonBoxTagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      shapeId: nonBoxId,
+      label: 'agent',
+      tagId: 'agent-2',
+    },
+  })
+  await waitForCommand(page, nonBoxTagCommand.id, 'failed')
+  const failedCommand = await getCommand(page, nonBoxTagCommand.id)
+  expect(failedCommand?.error).toContain('State tag target must be a box shape')
+
+  const clearCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      tagId: 'agent-1',
+      clear: true,
+    },
+  })
+  await waitForCommand(page, clearCommand.id)
+  await expect(tag).toHaveCount(0)
+})
+
+test('records highlight and state-tag events with timestamps', async ({ page }) => {
+  const diagramId = await createDiagram(page, uniqueId('Playwright Recording'))
+  await openWorkspace(page)
+
+  const firstStateId = uniqueId('pw-recording-first')
+  const secondStateId = uniqueId('pw-recording-second')
+
+  for (const shape of [
+    { id: firstStateId, label: 'First', x: 140 },
+    { id: secondStateId, label: 'Second', x: 420 },
+  ] as const) {
+    const command = await queueCommand(page, {
+      type: 'createShape',
+      input: {
+        id: shape.id,
+        type: 'box',
+        label: shape.label,
+        x: shape.x,
+        y: 170,
+        w: 170,
+        h: 90,
+      },
+    })
+    await waitForCommand(page, command.id)
+  }
+
+  const startResponse = await page.request.post('/api/diagram/recordings', {
+    data: {
+      diagramId,
+      name: 'Agent run',
+    },
+  })
+  expect(startResponse.status()).toBe(201)
+  const started = (await startResponse.json()) as {
+    activeId: string
+    recording: { id: string; startedAt: string }
+  }
+  expect(started.activeId).toBe(started.recording.id)
+
+  const highlightCommand = await queueCommand(page, {
+    type: 'highlight',
+    input: {
+      ids: [firstStateId],
+      color: 'yellow',
+      durationMs: 1200,
+    },
+  })
+  await waitForCommand(page, highlightCommand.id)
+
+  const firstTagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      shapeId: firstStateId,
+      label: 'agent',
+      tagId: 'agent-1',
+      color: 'blue',
+    },
+  })
+  await waitForCommand(page, firstTagCommand.id)
+
+  const secondTagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    input: {
+      shapeId: secondStateId,
+      label: 'agent',
+      tagId: 'agent-1',
+      color: 'green',
+    },
+  })
+  await waitForCommand(page, secondTagCommand.id)
+
+  const endResponse = await page.request.patch('/api/diagram/recordings/active', { data: {} })
+  expect(endResponse.ok()).toBeTruthy()
+  const ended = (await endResponse.json()) as {
+    activeId: string | null
+    recording: {
+      id: string
+      diagramId: string
+      status: string
+      startedAt: string
+      endedAt: string | null
+      eventCount: number
+      events: Array<{
+        commandId: string
+        diagramId: string
+        type: string
+        occurredAt: string
+        elapsedMs: number
+        input: Record<string, unknown>
+      }>
+    }
+  }
+
+  expect(ended.activeId).toBeNull()
+  expect(ended.recording.id).toBe(started.recording.id)
+  expect(ended.recording.diagramId).toBe(diagramId)
+  expect(ended.recording.status).toBe('ended')
+  expect(ended.recording.endedAt).not.toBeNull()
+  expect(ended.recording.eventCount).toBe(3)
+  expect(ended.recording.events.map((event) => event.commandId)).toEqual([
+    highlightCommand.id,
+    firstTagCommand.id,
+    secondTagCommand.id,
+  ])
+  expect(ended.recording.events.map((event) => event.type)).toEqual([
+    'highlight',
+    'setStateTag',
+    'setStateTag',
+  ])
+
+  for (const event of ended.recording.events) {
+    expect(event.diagramId).toBe(diagramId)
+    expect(Date.parse(event.occurredAt)).toBeGreaterThanOrEqual(Date.parse(started.recording.startedAt))
+    expect(event.elapsedMs).toBeGreaterThanOrEqual(0)
+  }
+
+  expect(ended.recording.events[0].input.ids).toEqual([firstStateId])
+  expect(ended.recording.events[1].input.shapeId).toBe(firstStateId)
+  expect(ended.recording.events[2].input.shapeId).toBe(secondStateId)
+
+  const showResponse = await page.request.get(`/api/diagram/recordings/${started.recording.id}`)
+  expect(showResponse.ok()).toBeTruthy()
+  const shown = (await showResponse.json()) as { recording: { eventCount: number } }
+  expect(shown.recording.eventCount).toBe(3)
 })

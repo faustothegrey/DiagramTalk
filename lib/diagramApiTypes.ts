@@ -1,5 +1,6 @@
 import type { DiagramContext } from './types'
 import type { HighlightColor } from './diagramHighlight'
+import type { StateTagColor } from './diagramStateTags'
 
 export type DiagramSnapshot = unknown
 
@@ -71,6 +72,14 @@ export type HighlightInput = {
   padding?: number
 }
 
+export type SetStateTagInput = {
+  shapeId?: string
+  label?: string
+  tagId?: string
+  color?: StateTagColor
+  clear?: boolean
+}
+
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'
 
 type DiagramCommandBase = {
@@ -109,12 +118,18 @@ export type HighlightCommand = DiagramCommandBase & {
   input: HighlightInput
 }
 
+export type SetStateTagCommand = DiagramCommandBase & {
+  type: 'setStateTag'
+  input: SetStateTagInput
+}
+
 export type DiagramCommand =
   | CreateShapeCommand
   | CreateConnectionCommand
   | ClearDiagramCommand
   | SetCameraCommand
   | HighlightCommand
+  | SetStateTagCommand
 
 export type GetDiagramContextResponse = {
   context: DiagramContext | null
@@ -157,6 +172,11 @@ export type CreateDiagramCommandRequest =
       input: HighlightInput
       diagramId?: string
     }
+  | {
+      type: 'setStateTag'
+      input: SetStateTagInput
+      diagramId?: string
+    }
 
 export type CreateDiagramCommandResponse = {
   command: DiagramCommand
@@ -177,6 +197,54 @@ export type DiagramCommandResultRequest =
 
 export type DiagramCommandResultResponse = {
   command: DiagramCommand
+}
+
+export type RecordingStatus = 'recording' | 'ended'
+
+export type RecordingEventType = 'highlight' | 'setStateTag'
+
+export type RecordingEvent = {
+  id: string
+  recordingId: string
+  diagramId: string
+  commandId: string
+  type: RecordingEventType
+  input: HighlightInput | SetStateTagInput
+  occurredAt: string
+  elapsedMs: number
+}
+
+export type DiagramRecordingSummary = {
+  id: string
+  diagramId: string
+  name: string | null
+  status: RecordingStatus
+  startedAt: string
+  endedAt: string | null
+  eventCount: number
+}
+
+export type DiagramRecording = DiagramRecordingSummary & {
+  events: RecordingEvent[]
+}
+
+export type ListRecordingsResponse = {
+  activeId: string | null
+  recordings: DiagramRecordingSummary[]
+}
+
+export type StartRecordingRequest = {
+  diagramId?: string
+  name?: string | null
+}
+
+export type RecordingResponse = {
+  recording: DiagramRecording
+  activeId: string | null
+}
+
+export type EndRecordingRequest = {
+  id?: string
 }
 
 export type AskDiagramRequest = {

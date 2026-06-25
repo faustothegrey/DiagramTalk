@@ -2,7 +2,7 @@
 
 A working handoff for an agent picking up this project. Read this first, then
 `PROJECT.md` (original product brief) and `diagramtalk/SKILL.md` (the agent-facing
-skill). Current `main` head when written: `9a1e87f`.
+skill). Current `main` head when written: `e13ab61`.
 
 ---
 
@@ -17,7 +17,8 @@ Two clients of the same app:
 - **Human**: draws on the canvas, uses the chat panel, switches/saves diagrams.
 - **Agent** (e.g. Codex/Claude via the skill): posts commands to create shapes,
   connect them, clear, frame the camera, render to an image, save,
-  pulse-highlight existing elements, and manage multiple diagrams — all over REST.
+  pulse-highlight existing elements, move state tags, record timed runs, and
+  manage multiple diagrams — all over REST.
 
 ## 2. Stack & how to run
 
@@ -61,6 +62,8 @@ app/
       commands/[id]/result/route.ts POST: bridge reports applied/failed
       render/route.ts              POST request / PUT upload / GET bytes|meta (pull-based)
       save/route.ts                POST request / GET status (pull-based)
+      recordings/route.ts          GET list / POST start recording
+      recordings/[id]/route.ts     GET recording / PATCH end recording (`active` alias)
       ask/route.ts                 POST: LLM Q&A about server-known context
     diagrams/route.ts              GET list+activeId / POST create
     diagrams/[id]/route.ts         GET / PATCH (rename|snapshot|active) / DELETE
@@ -80,6 +83,7 @@ lib/
   diagramApiStore.ts               In-memory: published context + command queue (global, resets on restart)
   diagramRenderStore.ts            In-memory: render request + cached renders
   diagramSaveStore.ts              In-memory: save request + savedAt timestamps
+  diagramRecordingStore.ts         Persistent timed logs of applied highlight/tag commands.
   diagramContext.ts                Builds normalized DiagramContext from the tldraw editor
   diagramExport.ts                 Client-side PDF/SVG export (editor.toImage / getSvgString)
   diagramHighlight.ts              Shared event name/types for transient highlight pulses.
@@ -105,12 +109,16 @@ diagramtalk/                       The skill (consumed by an external agent)
   - `clearDiagram`  (deletes all shapes on the page)
   - `setCamera`     `{ mode:'fit', padding? } | { mode:'topLeft', margin?, zoom? } | { mode:'absolute', x, y, zoom } }` (view-only)
   - `highlight`     `{ ids:string[], color?:'yellow'|'blue'|'green'|'red'|'violet', durationMs?, padding? }` (view-only transient pulse)
+  - `setStateTag`   `{ shapeId?, label?, tagId?, color?, clear? }` (view-only current-state badge on box shapes)
   - Optional `diagramId` targets a non-active diagram (validated; **auto-activate** — the open tab switches to it, applies, saves).
 - `GET  /api/diagram/commands?status=pending|applied|failed` — list queue.
 - `POST /api/diagram/commands/[id]/result` — bridge reports outcome.
 - `POST/GET /api/diagram/render` — request a render / fetch bytes; `GET ?id=&meta=1`
   for status. `PUT` is the bridge upload. Formats png|svg.
 - `POST/GET /api/diagram/save` — request a save / poll `{ id, savedAt, request }`.
+- `GET/POST /api/diagram/recordings` — list recordings / start recording the
+  active or specified diagram.
+- `GET/PATCH /api/diagram/recordings/{id|active}` — read a recording / end it.
 - `GET  /api/diagrams` — `{ activeId, diagrams[] }`.
 - `POST /api/diagrams` — create (becomes active).
 - `GET/PATCH/DELETE /api/diagrams/[id]` — get / rename·snapshot·`{active:true}` / delete.
@@ -119,7 +127,7 @@ diagramtalk/                       The skill (consumed by an external agent)
 ## 6. CLI verbs (`diagramtalk.py`)
 
 `context · snapshot · diagrams · new · use · rename · delete · commands · clear ·
-camera · highlight · save · render · shape · connect · layout · ask · wait`
+camera · highlight · tag · record · save · render · shape · connect · layout · ask · wait`
 
 Most mutating verbs accept `--diagram <id>` (auto-activate). `layout <spec>` runs
 the collision-checked layout engine; `--dry-run` previews `overlaps` +
@@ -155,9 +163,15 @@ the collision-checked layout engine; `--dry-run` previews `overlaps` +
 - **Highlight is not a tldraw highlighter shape.** It is a transient React overlay
   in `InFrontOfTheCanvas`, addressed by real shape ids. It never changes snapshots
   or renders, and it fails if any requested id is missing.
+- **Recordings are append-only run logs, not playback yet.** Start a recording,
+  drive `highlight`/`setStateTag`, then end it. Events are appended when the
+  browser bridge reports the command as applied, with `occurredAt` and
+  `elapsedMs`. Data persists in `.diagramtalk/recordings/`. Starting a new
+  recording closes any previous open recording before making the new one active.
 
 ## 8. Feature history (newest first)
 
+- `feature/state-tags` Dynamic state tags + timed recording facility (worktree branch).
 - `f603f47` Transient highlight command/API/CLI + Playwright e2e suite.
 - `9a1e87f` Explicit Save (UI button + `/api/diagram/save` + CLI `save`).
 - `2261d83` `setCamera` view command + `camera` CLI (fit / topLeft / absolute).

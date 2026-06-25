@@ -40,6 +40,10 @@ export function addDiagramCommand(command: DiagramCommand) {
   return command
 }
 
+export function getDiagramCommand(commandId: string) {
+  return state.commands.find((candidate) => candidate.id === commandId) ?? null
+}
+
 export function listDiagramCommands(status?: DiagramCommandStatus) {
   if (!status) return [...state.commands]
   return state.commands.filter((command) => command.status === status)
@@ -59,6 +63,7 @@ export function updateDiagramCommandResult(
   const command = state.commands.find((candidate) => candidate.id === commandId)
 
   if (!command) return null
+  if (command.status !== 'pending') return command
 
   command.status = result.status
   command.appliedAt = new Date().toISOString()

@@ -153,6 +153,71 @@ textarea {
   --diagram-highlight-glow: rgba(123, 97, 255, 0.46);
 }
 
+.diagramStateTagLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.diagramStateTag {
+  position: absolute;
+  max-width: 130px;
+  min-width: 24px;
+  transform: translate(-75%, -45%);
+  border: 1px solid var(--diagram-state-tag-border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: var(--diagram-state-tag-text);
+  background: var(--diagram-state-tag-bg);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.84),
+    0 8px 18px rgba(31, 35, 40, 0.18);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagramStateTagBlue {
+  --diagram-state-tag-bg: #2f80ed;
+  --diagram-state-tag-border: #1f5fb3;
+  --diagram-state-tag-text: #ffffff;
+}
+
+.diagramStateTagGreen {
+  --diagram-state-tag-bg: #219653;
+  --diagram-state-tag-border: #176a3b;
+  --diagram-state-tag-text: #ffffff;
+}
+
+.diagramStateTagYellow {
+  --diagram-state-tag-bg: #f2c94c;
+  --diagram-state-tag-border: #b68c16;
+  --diagram-state-tag-text: #1f2328;
+}
+
+.diagramStateTagRed {
+  --diagram-state-tag-bg: #eb5757;
+  --diagram-state-tag-border: #ad3030;
+  --diagram-state-tag-text: #ffffff;
+}
+
+.diagramStateTagViolet {
+  --diagram-state-tag-bg: #7b61ff;
+  --diagram-state-tag-border: #5643bf;
+  --diagram-state-tag-text: #ffffff;
+}
+
+.diagramStateTagGrey {
+  --diagram-state-tag-bg: #6b7280;
+  --diagram-state-tag-border: #4b5563;
+  --diagram-state-tag-text: #ffffff;
+}
+
 @keyframes diagramHighlightPulse {
   0% {
     opacity: 0;

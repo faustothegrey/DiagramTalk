@@ -191,6 +191,44 @@ Optional highlight fields:
 - `padding`: extra screen pixels around the highlighted element, from 0 to 80
   (default 10).
 
+Set or move a dynamic state tag on a box/rectangle shape:
+
+```json
+{
+  "type": "setStateTag",
+  "input": {
+    "shapeId": "shape:waiting",
+    "label": "agent",
+    "tagId": "agent-1",
+    "color": "blue"
+  }
+}
+```
+
+`setStateTag` displays a compact badge at the target shape's top-right corner.
+It is intended for state-machine diagrams where an external test runner wants
+to show the agent's current state. Tags are live overlays: they do not mutate
+the tldraw snapshot and do not appear in renders. Setting the same `tagId` on a
+different shape moves that marker. Targets must be box/rectangle shapes; missing
+or non-box targets fail the command.
+
+Clear a marker:
+
+```json
+{
+  "type": "setStateTag",
+  "input": {
+    "tagId": "agent-1",
+    "clear": true
+  }
+}
+```
+
+Optional state tag fields:
+
+- `tagId`: logical marker id, default `agent`.
+- `color`: `blue` (default), `green`, `yellow`, `red`, `violet`, or `grey`.
+
 **Targeting a specific diagram.** Any command may include an optional
 `diagramId` (validated to exist, else `404`) to act on a diagram other than the
 active one:
@@ -205,7 +243,7 @@ applies the command, and saves — so edits land on the right diagram without a
 separate `use` call. (tldraw runs only in the browser, so this still needs an
 app tab open; the targeted diagram becomes the active one afterward.) The CLI
 exposes this as `--diagram <id>` on `shape`, `connect`, `clear`, `layout`,
-`render`, `camera`, and `highlight`.
+`render`, `camera`, `highlight`, and `tag`.
 
 Move the camera (view only — never mutates or persists shapes):
 
@@ -291,6 +329,67 @@ flushes the live snapshot.
 Needs the app tab open (the bridge performs the save). CLI: `save [--diagram <id>]`.
 The UI's **Save** button (next to New/Delete) does the same flush directly.
 
+### Recording endpoints (`/api/diagram/recordings`)
+
+A recording is a persisted timed reproduction log for externally driven
+diagram events. It records only driver-originated visual events that happen via
+the command bridge today:
+
+- `highlight`
+- `setStateTag`
+
+Start a recording:
+
+```json
+POST /api/diagram/recordings
+{
+  "diagramId": "<diagram id>",
+  "name": "Agent run 42"
+}
+```
+
+`diagramId` defaults to the active diagram. The response includes
+`{ recording, activeId }`. Only one recording is active at a time; starting a
+new one closes any previous open recording and makes the new recording active.
+
+When the browser bridge applies a `highlight` or `setStateTag` command and
+reports it as applied, the server appends an event to the active recording if
+the command's diagram matches the recording's `diagramId`. Each event includes:
+
+- `type`: `highlight` or `setStateTag`
+- `input`: the original command input
+- `commandId`
+- `occurredAt`: ISO timestamp when the command was reported applied
+- `elapsedMs`: milliseconds since `recording.startedAt`
+
+End the current recording:
+
+```txt
+PATCH /api/diagram/recordings/active
+```
+
+Fetch recordings:
+
+```txt
+GET /api/diagram/recordings
+GET /api/diagram/recordings/{id}
+GET /api/diagram/recordings/active
+```
+
+CLI:
+
+```bash
+python3 diagramtalk/scripts/diagramtalk.py record start --name "Agent run"
+python3 diagramtalk/scripts/diagramtalk.py highlight shape:waiting
+python3 diagramtalk/scripts/diagramtalk.py tag shape:waiting agent --tag-id agent-1
+python3 diagramtalk/scripts/diagramtalk.py record end
+python3 diagramtalk/scripts/diagramtalk.py record show <recording-id>
+```
+
+Recordings persist under `.diagramtalk/recordings/`; the active recording
+pointer is `.diagramtalk/recordings-index.json`. Recording does not replay yet;
+it stores enough timed data for a later playback facility.
+
 ### Browser regression checks
 
 The app includes Playwright e2e coverage for browser-only behavior:
@@ -303,8 +402,8 @@ The suite starts a separate dev server on `http://localhost:3001` by default and
 drives Chromium. It verifies that the browser bridge applies shape/connection
 commands, targeted diagram commands auto-activate the correct diagram, explicit
 save persists a snapshot, PNG/SVG renders are non-empty, camera commands move
-the live viewport, and highlight commands are transient and fail cleanly for
-missing ids.
+the live viewport, highlight commands are transient, state tags move between
+states, and recordings persist timed highlight/tag events.
 
 ## Practical Notes
 
