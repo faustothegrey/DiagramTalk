@@ -114,11 +114,10 @@ textarea {
   border-radius: 10px;
   background: var(--diagram-highlight-fill);
   box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.82),
-    0 0 24px var(--diagram-highlight-glow);
+    0 0 18px var(--diagram-highlight-glow);
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.92);
+  transform: scale(1);
   transform-origin: center;
   animation: diagramHighlightPulse var(--diagram-highlight-duration, 1600ms) ease-out forwards;
 }
@@ -221,7 +220,7 @@ textarea {
 @keyframes diagramHighlightPulse {
   0% {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(1);
   }
 
   18% {
@@ -231,12 +230,12 @@ textarea {
 
   62% {
     opacity: 0.92;
-    transform: scale(1.045);
+    transform: scale(1);
   }
 
   100% {
     opacity: 0;
-    transform: scale(1.12);
+    transform: scale(1);
   }
 }
 
@@ -428,7 +427,7 @@ textarea {
 
 .tabStrip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 12px 18px 0;
   border-bottom: 1px solid var(--panel-border);
@@ -460,6 +459,98 @@ textarea {
   padding: 18px;
   min-height: 0;
   overflow-y: auto;
+}
+
+.recordingsPanel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.recordingsSummary,
+.recordingsEmpty,
+.recordingError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.recordingsSummary,
+.recordingsEmpty {
+  color: var(--muted);
+}
+
+.recordingError {
+  border: 1px solid #e1b5ad;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: #fff0ee;
+}
+
+.recordingList {
+  display: grid;
+  gap: 10px;
+}
+
+.recordingItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafaf8;
+}
+
+.recordingMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recordingMeta strong,
+.recordingMeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordingMeta strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.recordingMeta span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.recordingPlayButton {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.recordingPlayButton:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.recordingPlayButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .commandsGroup {

@@ -7,6 +7,7 @@ import {
   type DiagramStateTagEventDetail,
   type StateTagColor,
 } from '@/lib/diagramStateTags'
+import { useEditorContainerOffset } from '@/components/useEditorContainerOffset'
 
 type StateTagEntry = {
   tagId: string
@@ -26,6 +27,7 @@ const colorClasses: Record<StateTagColor, string> = {
 
 export function DiagramStateTagOverlay() {
   const editor = useEditor()
+  const containerOffset = useEditorContainerOffset(editor)
   const [tags, setTags] = useState<StateTagEntry[]>([])
 
   useEffect(() => {
@@ -67,14 +69,14 @@ export function DiagramStateTagOverlay() {
 
         const topRight = editor.pageToScreen({ x: bounds.maxX, y: bounds.minY })
         const style = {
-          left: topRight.x,
-          top: topRight.y,
+          left: topRight.x - containerOffset.left,
+          top: topRight.y - containerOffset.top,
         } as CSSProperties
 
         return [{ ...tag, style }]
       })
     },
-    [editor, tags],
+    [containerOffset.left, containerOffset.top, editor, tags],
   )
 
   if (positionedTags.length === 0) return null

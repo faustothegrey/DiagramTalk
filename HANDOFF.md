@@ -68,6 +68,29 @@ Consequences:
 
 ## 4. Important Runtime Semantics
 
+### Data Safety
+
+`.diagramtalk/` is the user's local DiagramTalk data store, not disposable test
+output. It contains saved diagrams, the active diagram pointer, recordings, and
+legacy migrated snapshots. Never remove it during cleanup.
+
+Safe cleanup targets:
+
+```bash
+rm -rf test-results playwright-report
+```
+
+Unsafe cleanup target:
+
+```bash
+rm -rf .diagramtalk
+```
+
+This exact mistake previously deleted the user's saved diagrams. Recovery was
+possible only because Time Machine had a recent backup. If test runs create
+unwanted Playwright diagrams inside `.diagramtalk`, remove those specific
+diagram records only after inspecting them, or leave them for the user.
+
 ### Autosave
 
 The browser bridge autosaves the active diagram snapshot after canvas changes by
@@ -403,7 +426,10 @@ Newest first:
   disturbed.
 - Use `rg` for searches.
 - Use `apply_patch` for manual edits.
-- Do not commit `.diagramtalk/`, `test-results/`, or `playwright-report/`.
+- Do not commit `.diagramtalk/`, `.diagramtalk.*`, `test-results/`, or
+  `playwright-report/`.
+- Never delete `.diagramtalk/` as cleanup. It is user data, even though it is
+  git-ignored.
 - Commit and push only when asked.
 - After API/CLI behavior changes, update both `diagramtalk/SKILL.md` and
   `diagramtalk/references/api.md`.

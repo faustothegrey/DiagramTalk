@@ -362,7 +362,7 @@ function applyHighlightCommand(editor: Editor, command: HighlightCommand) {
         ids,
         color: command.input.color ?? 'yellow',
         durationMs: command.input.durationMs ?? 1600,
-        padding: command.input.padding ?? 10,
+        padding: command.input.padding ?? 0,
       },
     }),
   )

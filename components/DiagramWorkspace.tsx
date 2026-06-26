@@ -438,6 +438,7 @@ export function DiagramWorkspace() {
         tabIndex={0}
       />
       <ChatPanel
+        activeDiagramId={activeId}
         diagram={diagram}
         diagramName={diagramName}
         editor={editor}

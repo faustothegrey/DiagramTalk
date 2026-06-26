@@ -172,7 +172,7 @@ Highlight one or more existing elements in the live editor:
     "ids": ["shape:node-a", "shape:edge-a-b"],
     "color": "yellow",
     "durationMs": 1600,
-    "padding": 10
+    "padding": 0
   }
 }
 ```
@@ -189,7 +189,7 @@ Optional highlight fields:
 - `durationMs`: animation duration in milliseconds, from 100 to 10000
   (default 1600).
 - `padding`: extra screen pixels around the highlighted element, from 0 to 80
-  (default 10).
+  (default 0, matching the element border).
 
 Set or move a dynamic state tag on a box/rectangle shape:
 

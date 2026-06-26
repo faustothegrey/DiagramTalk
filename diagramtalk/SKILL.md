@@ -243,7 +243,8 @@ python3 scripts/diagramtalk.py snapshot
 
 Highlight existing elements in the live app by id (view-only, transient, not
 saved). Use ids from `context.shapes`; connection `arrowId` values are also
-shape ids and can be highlighted:
+shape ids and can be highlighted. By default the highlight border matches the
+element bounds; pass `--padding` only when you want a larger callout:
 
 ```bash
 python3 scripts/diagramtalk.py highlight shape:example-node

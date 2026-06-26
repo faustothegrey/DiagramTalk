@@ -12,6 +12,7 @@ pnpm-debug.log*
 .DS_Store
 *.tsbuildinfo
 .diagramtalk/
+.diagramtalk.*/
 .claude/
 playwright-report/
 test-results/

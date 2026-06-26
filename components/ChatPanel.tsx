@@ -1,9 +1,17 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Editor } from 'tldraw'
 import { SelectionSummary } from '@/components/SelectionSummary'
 import { exportCurrentDiagramAsPdf, exportCurrentDiagramAsSvg } from '@/lib/diagramExport'
+import type {
+  CreateDiagramCommandRequest,
+  DiagramRecordingSummary,
+  HighlightInput,
+  ListRecordingsResponse,
+  RecordingResponse,
+  SetStateTagInput,
+} from '@/lib/diagramApiTypes'
 import type {
   ChatMessage,
   DiagramChatResponse,
@@ -14,19 +22,35 @@ type ChatPanelProps = {
   diagram: DiagramContext
   editor: Editor | null
   diagramName: string | null
+  activeDiagramId: string | null
   onDiagramNameChange: (name: string) => void
 }
 
-export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }: ChatPanelProps) {
-  const [activeTab, setActiveTab] = useState<'chat' | 'commands'>('chat')
+export function ChatPanel({
+  diagram,
+  editor,
+  diagramName,
+  activeDiagramId,
+  onDiagramNameChange,
+}: ChatPanelProps) {
+  const [activeTab, setActiveTab] = useState<'chat' | 'commands' | 'recordings'>('chat')
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [activeExport, setActiveExport] = useState<'pdf' | 'svg' | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [recordings, setRecordings] = useState<DiagramRecordingSummary[]>([])
+  const [isLoadingRecordings, setIsLoadingRecordings] = useState(false)
+  const [recordingError, setRecordingError] = useState<string | null>(null)
+  const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null)
+  const playbackTimersRef = useRef<number[]>([])
 
   const canSubmit = question.trim().length > 0 && !isLoading
   const canExport = activeExport === null
+  const currentRecordings = useMemo(
+    () => recordings.filter((recording) => recording.diagramId === activeDiagramId),
+    [activeDiagramId, recordings],
+  )
 
   const recentMessages = useMemo(
     () =>
@@ -39,6 +63,145 @@ export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }:
         })),
     [messages],
   )
+
+  const clearPlaybackTimers = useCallback(() => {
+    for (const timer of playbackTimersRef.current) {
+      window.clearTimeout(timer)
+    }
+    playbackTimersRef.current = []
+  }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'recordings') return
+
+    let isDisposed = false
+
+    async function loadRecordings() {
+      setIsLoadingRecordings(true)
+      setRecordingError(null)
+
+      try {
+        const response = await fetch('/api/diagram/recordings')
+        const payload = (await response.json().catch(() => null)) as
+          | ListRecordingsResponse
+          | { error?: string }
+          | null
+
+        if (!response.ok) {
+          throw new Error(payload && 'error' in payload && payload.error ? payload.error : 'Request failed.')
+        }
+
+        if (!payload || !('recordings' in payload)) {
+          throw new Error('The recordings response was malformed.')
+        }
+
+        if (!isDisposed) setRecordings(payload.recordings)
+      } catch (error) {
+        if (!isDisposed) {
+          const message = error instanceof Error ? error.message : 'Unable to load recordings.'
+          setRecordingError(message)
+        }
+      } finally {
+        if (!isDisposed) setIsLoadingRecordings(false)
+      }
+    }
+
+    void loadRecordings()
+
+    return () => {
+      isDisposed = true
+    }
+  }, [activeTab, activeDiagramId])
+
+  useEffect(() => {
+    return () => clearPlaybackTimers()
+  }, [clearPlaybackTimers])
+
+  async function postCommand(payload: CreateDiagramCommandRequest) {
+    const response = await fetch('/api/diagram/commands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Command failed with ${response.status}.`)
+    }
+  }
+
+  async function handlePlayRecording(recordingId: string) {
+    clearPlaybackTimers()
+    setPlayingRecordingId(recordingId)
+    setRecordingError(null)
+
+    try {
+      const response = await fetch(`/api/diagram/recordings/${recordingId}`)
+      const payload = (await response.json().catch(() => null)) as
+        | RecordingResponse
+        | { error?: string }
+        | null
+
+      if (!response.ok) {
+        throw new Error(payload && 'error' in payload && payload.error ? payload.error : 'Request failed.')
+      }
+
+      if (!payload || !('recording' in payload)) {
+        throw new Error('The recording response was malformed.')
+      }
+
+      const events = [...payload.recording.events].sort((a, b) => a.elapsedMs - b.elapsedMs)
+      const tagIds = new Set(
+        events.flatMap((event) =>
+          event.type === 'setStateTag' && 'tagId' in event.input && event.input.tagId
+            ? [event.input.tagId]
+            : [],
+        ),
+      )
+
+      for (const tagId of tagIds) {
+        await postCommand({
+          type: 'setStateTag',
+          diagramId: payload.recording.diagramId,
+          input: { tagId, clear: true },
+        })
+      }
+
+      for (const event of events) {
+        const timer = window.setTimeout(() => {
+          const command: CreateDiagramCommandRequest =
+            event.type === 'highlight'
+              ? {
+                  type: 'highlight',
+                  diagramId: payload.recording.diagramId,
+                  input: event.input as HighlightInput,
+                }
+              : {
+                  type: 'setStateTag',
+                  diagramId: payload.recording.diagramId,
+                  input: event.input as SetStateTagInput,
+                }
+
+          void postCommand(command).catch((error) => {
+            const message = error instanceof Error ? error.message : 'Playback command failed.'
+            setRecordingError(message)
+          })
+        }, event.elapsedMs)
+
+        playbackTimersRef.current.push(timer)
+      }
+
+      const endDelay = Math.max(0, ...events.map((event) => event.elapsedMs)) + 800
+      const doneTimer = window.setTimeout(() => {
+        setPlayingRecordingId((current) => (current === recordingId ? null : current))
+        playbackTimersRef.current = playbackTimersRef.current.filter((timer) => timer !== doneTimer)
+      }, endDelay)
+      playbackTimersRef.current.push(doneTimer)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to play recording.'
+      setRecordingError(message)
+      setPlayingRecordingId(null)
+    }
+  }
 
   async function handleExport(format: 'pdf' | 'svg') {
     if (!editor) {
@@ -136,6 +299,15 @@ export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }:
         >
           Commands
         </button>
+        <button
+          aria-selected={activeTab === 'recordings'}
+          className={activeTab === 'recordings' ? 'tabButton tabButtonActive' : 'tabButton'}
+          onClick={() => setActiveTab('recordings')}
+          role="tab"
+          type="button"
+        >
+          Recordings
+        </button>
       </div>
 
       {activeTab === 'chat' ? (
@@ -191,7 +363,7 @@ export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }:
             </div>
           </form>
         </>
-      ) : (
+      ) : activeTab === 'commands' ? (
         <section className="commandsPanel" role="tabpanel">
           <div className="commandsGroup">
             <p className="commandsLabel">Diagram name</p>
@@ -242,6 +414,46 @@ export function ChatPanel({ diagram, editor, diagramName, onDiagramNameChange }:
             </div>
           </div>
         </section>
+      ) : (
+        <section className="recordingsPanel" role="tabpanel">
+          <div className="commandsGroup">
+            <p className="commandsLabel">Current diagram</p>
+            <p className="recordingsSummary">
+              {diagramName?.trim() || 'Untitled diagram'}
+            </p>
+          </div>
+
+          {recordingError ? <p className="recordingError">{recordingError}</p> : null}
+
+          {isLoadingRecordings ? (
+            <p className="recordingsEmpty">Loading recordings...</p>
+          ) : currentRecordings.length === 0 ? (
+            <p className="recordingsEmpty">No recordings for this diagram.</p>
+          ) : (
+            <div className="recordingList">
+              {currentRecordings.map((recording) => (
+                <article className="recordingItem" key={recording.id}>
+                  <div className="recordingMeta">
+                    <strong>{recording.name ?? 'Untitled recording'}</strong>
+                    <span>
+                      {recording.eventCount} event{recording.eventCount === 1 ? '' : 's'} ·{' '}
+                      {recording.status}
+                    </span>
+                    <span>{formatTimestamp(recording.startedAt)}</span>
+                  </div>
+                  <button
+                    className="recordingPlayButton"
+                    disabled={recording.eventCount === 0 || playingRecordingId !== null}
+                    onClick={() => void handlePlayRecording(recording.id)}
+                    type="button"
+                  >
+                    {playingRecordingId === recording.id ? 'Playing...' : 'Play Again'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </aside>
   )
@@ -260,4 +472,14 @@ function roleLabel(role: ChatMessage['role']) {
   if (role === 'user') return 'You'
   if (role === 'assistant') return 'Assistant'
   return 'Error'
+}
+
+function formatTimestamp(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }

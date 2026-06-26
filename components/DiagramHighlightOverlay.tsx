@@ -7,6 +7,7 @@ import {
   type DiagramHighlightEventDetail,
   type HighlightColor,
 } from '@/lib/diagramHighlight'
+import { useEditorContainerOffset } from '@/components/useEditorContainerOffset'
 
 type HighlightEntry = DiagramHighlightEventDetail & {
   key: string
@@ -22,6 +23,7 @@ const colorClasses: Record<HighlightColor, string> = {
 
 export function DiagramHighlightOverlay() {
   const editor = useEditor()
+  const containerOffset = useEditorContainerOffset(editor)
   const [entries, setEntries] = useState<HighlightEntry[]>([])
   const timersRef = useRef<number[]>([])
 
@@ -67,8 +69,8 @@ export function DiagramHighlightOverlay() {
           const topLeft = editor.pageToScreen({ x: bounds.minX, y: bounds.minY })
           const bottomRight = editor.pageToScreen({ x: bounds.maxX, y: bounds.maxY })
           const style = {
-            left: topLeft.x - entry.padding,
-            top: topLeft.y - entry.padding,
+            left: topLeft.x - containerOffset.left - entry.padding,
+            top: topLeft.y - containerOffset.top - entry.padding,
             width: bottomRight.x - topLeft.x + entry.padding * 2,
             height: bottomRight.y - topLeft.y + entry.padding * 2,
             '--diagram-highlight-duration': `${entry.durationMs}ms`,
@@ -84,7 +86,7 @@ export function DiagramHighlightOverlay() {
         }),
       )
     },
-    [editor, entries],
+    [containerOffset.left, containerOffset.top, editor, entries],
   )
 
   if (pulses.length === 0) return null
