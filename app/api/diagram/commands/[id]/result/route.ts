@@ -1,12 +1,7 @@
-import { getDiagramCommand, updateDiagramCommandResult } from '@/lib/diagramApiStore'
-import { getActiveDiagram } from '@/lib/diagramStore'
-import { appendRecordingEvent } from '@/lib/diagramRecordingStore'
+import { updateDiagramCommandResult } from '@/lib/diagramApiStore'
 import type {
-  DiagramCommand,
   DiagramCommandResultRequest,
   DiagramCommandResultResponse,
-  HighlightCommand,
-  SetStateTagCommand,
 } from '@/lib/diagramApiTypes'
 
 type RouteContext = {
@@ -29,39 +24,15 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: 'Invalid command result request.' }, { status: 400 })
   }
 
-  const wasPending = getDiagramCommand(id)?.status === 'pending'
   const command = updateDiagramCommandResult(id, payload)
 
   if (!command) {
     return Response.json({ error: 'Command not found.' }, { status: 404 })
   }
 
-  if (wasPending && payload.status === 'applied') {
-    await recordAppliedCommand(command)
-  }
-
   const response: DiagramCommandResultResponse = { command }
 
   return Response.json(response)
-}
-
-async function recordAppliedCommand(command: DiagramCommand) {
-  if (!isRecordableCommand(command)) return
-
-  const diagramId = command.diagramId ?? (await getActiveDiagram())?.id ?? null
-  if (!diagramId) return
-
-  await appendRecordingEvent({
-    diagramId,
-    commandId: command.id,
-    type: command.type,
-    input: command.input,
-    occurredAt: command.appliedAt,
-  })
-}
-
-function isRecordableCommand(command: DiagramCommand): command is HighlightCommand | SetStateTagCommand {
-  return command.type === 'highlight' || command.type === 'setStateTag'
 }
 
 function isDiagramCommandResultRequest(

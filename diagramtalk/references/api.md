@@ -396,14 +396,17 @@ and includes `result.recordingId` and `result.activeId`. Only one recording is
 active at a time; starting a new one closes any previous open recording and
 makes the new recording active.
 
-When the browser bridge applies a `highlight` or `setStateTag` command and
-reports it as applied, the server appends an event to the active recording if
-the command's diagram matches the recording's `diagramId`. Each event includes:
+When a `highlight` or `setStateTag` command is enqueued, the server appends an
+event to the active recording if the command's diagram matches the recording's
+`diagramId`. This happens before the browser bridge applies the command, so a
+recording captures the external driver's intended event stream even when
+`endRecording` is posted immediately after the last visual command. Each event
+includes:
 
 - `type`: `highlight` or `setStateTag`
 - `input`: the original command input
 - `commandId`
-- `occurredAt`: ISO timestamp when the command was reported applied
+- `occurredAt`: ISO timestamp when the command was enqueued
 - `elapsedMs`: milliseconds since `recording.startedAt`
 
 While a recording is active for a diagram, the diagram's snapshot persistence is

@@ -662,3 +662,73 @@ test('starts and ends recordings as first-class diagram commands', async ({ page
   expect(shown.recording.status).toBe('ended')
   expect(shown.recording.endedAt).not.toBeNull()
 })
+
+test('records visual commands at enqueue time before endRecording closes the run', async ({ page }) => {
+  const diagramId = await createDiagram(page, uniqueId('Playwright Enqueue Recording'))
+
+  const startCommand = await queueCommand(page, {
+    type: 'startRecording',
+    diagramId,
+    input: {
+      name: 'Enqueue-time run',
+    },
+  })
+  const recordingId = startCommand.result?.recordingId
+  expect(recordingId).toBeTruthy()
+
+  const highlightCommand = await queueCommand(page, {
+    type: 'highlight',
+    diagramId,
+    input: {
+      ids: ['shape:queued-edge'],
+      color: 'yellow',
+      durationMs: 1000,
+    },
+  })
+  const tagCommand = await queueCommand(page, {
+    type: 'setStateTag',
+    diagramId,
+    input: {
+      shapeId: 'shape:queued-state',
+      label: 'agent',
+      tagId: 'agent-queued',
+      color: 'blue',
+    },
+  })
+
+  const endCommand = await queueCommand(page, {
+    type: 'endRecording',
+    diagramId,
+  })
+  expect(endCommand.status).toBe('applied')
+
+  const showResponse = await page.request.get(`/api/diagram/recordings/${recordingId}`)
+  expect(showResponse.ok()).toBeTruthy()
+  const shown = (await showResponse.json()) as {
+    recording: {
+      status: string
+      eventCount: number
+      startedAt: string
+      events: Array<{
+        commandId: string
+        type: string
+        occurredAt: string
+        elapsedMs: number
+        input: Record<string, unknown>
+      }>
+    }
+  }
+
+  expect(shown.recording.status).toBe('ended')
+  expect(shown.recording.eventCount).toBe(2)
+  expect(shown.recording.events.map((event) => event.commandId)).toEqual([
+    highlightCommand.id,
+    tagCommand.id,
+  ])
+  expect(shown.recording.events.map((event) => event.type)).toEqual(['highlight', 'setStateTag'])
+
+  for (const event of shown.recording.events) {
+    expect(Date.parse(event.occurredAt)).toBeGreaterThanOrEqual(Date.parse(shown.recording.startedAt))
+    expect(event.elapsedMs).toBeGreaterThanOrEqual(0)
+  }
+})

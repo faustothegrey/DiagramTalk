@@ -287,10 +287,11 @@ python3 scripts/diagramtalk.py record show <recording-id>
 ```
 
 Each recorded event stores the original command input, the command id,
-`occurredAt`, and `elapsedMs` from the recording start. Recording is driven by
-the browser bridge's applied-command report, so it captures visible event order
-rather than just request enqueue order. A playback/replay endpoint is not
-implemented yet.
+`occurredAt`, and `elapsedMs` from the recording start. Recording captures
+`highlight` and `tag` at command enqueue time, so it preserves the external
+driver's intended event stream even if `endRecording` is posted before the
+browser has applied the trailing visual commands. A playback/replay endpoint is
+not implemented yet.
 
 Raw API form for external agents:
 
@@ -384,8 +385,9 @@ npm run test:e2e
 - Server command queue state is in memory and resets on Next.js restart.
 - Recording metadata and events persist to `.diagramtalk/recordings/`. Only one
   recording is active; starting a new one closes any previous open recording.
-  Only events reported while a recording is active are captured. If commands
-  stay pending because no tab is open, no recording event is appended yet.
+  `highlight` and `tag` events are captured when commands are enqueued while a
+  recording is active for that diagram. They can appear in the recording even if
+  the browser command later stays pending or fails.
 - Diagram snapshots autosave after canvas changes, but snapshot persistence is
   disabled while that diagram has an active recording. During a run, use
   `highlight` and `tag` so events are appended to the recording instead of

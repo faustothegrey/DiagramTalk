@@ -127,8 +127,11 @@ Recordings persist under:
 ```
 
 Only one recording is active at a time. Starting a new one closes any previous
-open recording. Recorded events are appended when the browser bridge reports an
-applied `highlight` or `setStateTag` command for the recording's diagram.
+open recording. Recorded events are appended when `highlight` or `setStateTag`
+commands are enqueued for the recording's diagram. This is intentionally
+enqueue-time capture: recordings represent external-driver intent and remain
+complete even if `endRecording` arrives before the browser bridge has applied
+the trailing visual commands.
 
 External drivers should prefer the first-class diagram command forms:
 

@@ -2,6 +2,7 @@ import { addDiagramCommand, listDiagramCommands } from '@/lib/diagramApiStore'
 import { getActiveDiagram, getDiagram } from '@/lib/diagramStore'
 import {
   endRecording,
+  appendRecordingEvent,
   getActiveRecording,
   getActiveRecordingForDiagram,
   getRecording,
@@ -14,7 +15,9 @@ import type {
   DiagramCommand,
   DiagramCommandStatus,
   EndRecordingInput,
+  HighlightCommand,
   ListDiagramCommandsResponse,
+  SetStateTagCommand,
   StartRecordingInput,
 } from '@/lib/diagramApiTypes'
 
@@ -84,11 +87,33 @@ export async function POST(request: Request) {
     command = { ...baseCommand, type: 'clearDiagram' }
   }
 
+  const addedCommand = addDiagramCommand(command)
+  await recordEnqueuedCommand(addedCommand)
+
   const response: CreateDiagramCommandResponse = {
-    command: addDiagramCommand(command),
+    command: addedCommand,
   }
 
   return Response.json(response, { status: 201 })
+}
+
+async function recordEnqueuedCommand(command: DiagramCommand) {
+  if (!isRecordableCommand(command)) return
+
+  const diagramId = command.diagramId ?? (await getActiveDiagram())?.id ?? null
+  if (!diagramId) return
+
+  await appendRecordingEvent({
+    diagramId,
+    commandId: command.id,
+    type: command.type,
+    input: command.input,
+    occurredAt: command.createdAt,
+  })
+}
+
+function isRecordableCommand(command: DiagramCommand): command is HighlightCommand | SetStateTagCommand {
+  return command.type === 'highlight' || command.type === 'setStateTag'
 }
 
 async function createStartRecordingCommand(
