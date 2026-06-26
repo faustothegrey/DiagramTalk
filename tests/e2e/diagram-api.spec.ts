@@ -5,6 +5,10 @@ type DiagramCommand = {
   id: string
   status: string
   error?: string
+  result?: {
+    recordingId?: string
+    activeId?: string | null
+  }
 }
 
 type DiagramContextShape = {
@@ -611,4 +615,50 @@ test('records highlight and state-tag events with timestamps', async ({ page }) 
   expect(showResponse.ok()).toBeTruthy()
   const shown = (await showResponse.json()) as { recording: { eventCount: number } }
   expect(shown.recording.eventCount).toBe(3)
+})
+
+test('starts and ends recordings as first-class diagram commands', async ({ page }) => {
+  const diagramId = await createDiagram(page, uniqueId('Playwright Command Recording'))
+
+  const startCommand = await queueCommand(page, {
+    type: 'startRecording',
+    diagramId,
+    input: {
+      name: 'Command-started run',
+    },
+  })
+
+  expect(startCommand.status).toBe('applied')
+  expect(startCommand.result?.recordingId).toBeTruthy()
+  expect(startCommand.result?.activeId).toBe(startCommand.result?.recordingId)
+
+  const activeResponse = await page.request.get('/api/diagram/recordings/active')
+  expect(activeResponse.ok()).toBeTruthy()
+  const active = (await activeResponse.json()) as {
+    recording: { id: string; diagramId: string; name: string | null; status: string }
+  }
+  expect(active.recording.id).toBe(startCommand.result?.recordingId)
+  expect(active.recording.diagramId).toBe(diagramId)
+  expect(active.recording.name).toBe('Command-started run')
+  expect(active.recording.status).toBe('recording')
+
+  const endCommand = await queueCommand(page, {
+    type: 'endRecording',
+    diagramId,
+  })
+
+  expect(endCommand.status).toBe('applied')
+  expect(endCommand.result?.recordingId).toBe(startCommand.result?.recordingId)
+  expect(endCommand.result?.activeId).toBeNull()
+
+  const showResponse = await page.request.get(`/api/diagram/recordings/${startCommand.result?.recordingId}`)
+  expect(showResponse.ok()).toBeTruthy()
+  const shown = (await showResponse.json()) as {
+    activeId: string | null
+    recording: { id: string; status: string; endedAt: string | null }
+  }
+  expect(shown.activeId).toBeNull()
+  expect(shown.recording.id).toBe(startCommand.result?.recordingId)
+  expect(shown.recording.status).toBe('ended')
+  expect(shown.recording.endedAt).not.toBeNull()
 })

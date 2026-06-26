@@ -338,7 +338,9 @@ function applyDiagramCommand(editor: Editor, command: DiagramCommand) {
     return
   }
 
-  applyCreateConnectionCommand(editor, command)
+  if (command.type === 'createConnection') {
+    applyCreateConnectionCommand(editor, command)
+  }
 }
 
 function applyClearDiagramCommand(editor: Editor) {

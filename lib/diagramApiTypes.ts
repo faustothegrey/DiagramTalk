@@ -80,6 +80,14 @@ export type SetStateTagInput = {
   clear?: boolean
 }
 
+export type StartRecordingInput = {
+  name?: string | null
+}
+
+export type EndRecordingInput = {
+  id?: string
+}
+
 export type DiagramCommandStatus = 'pending' | 'applied' | 'failed'
 
 type DiagramCommandBase = {
@@ -123,6 +131,23 @@ export type SetStateTagCommand = DiagramCommandBase & {
   input: SetStateTagInput
 }
 
+export type RecordingCommandResult = {
+  recordingId: string
+  activeId: string | null
+}
+
+export type StartRecordingCommand = DiagramCommandBase & {
+  type: 'startRecording'
+  input?: StartRecordingInput
+  result: RecordingCommandResult
+}
+
+export type EndRecordingCommand = DiagramCommandBase & {
+  type: 'endRecording'
+  input?: EndRecordingInput
+  result: RecordingCommandResult
+}
+
 export type DiagramCommand =
   | CreateShapeCommand
   | CreateConnectionCommand
@@ -130,6 +155,8 @@ export type DiagramCommand =
   | SetCameraCommand
   | HighlightCommand
   | SetStateTagCommand
+  | StartRecordingCommand
+  | EndRecordingCommand
 
 export type GetDiagramContextResponse = {
   context: DiagramContext | null
@@ -175,6 +202,16 @@ export type CreateDiagramCommandRequest =
   | {
       type: 'setStateTag'
       input: SetStateTagInput
+      diagramId?: string
+    }
+  | {
+      type: 'startRecording'
+      input?: StartRecordingInput
+      diagramId?: string
+    }
+  | {
+      type: 'endRecording'
+      input?: EndRecordingInput
       diagramId?: string
     }
 

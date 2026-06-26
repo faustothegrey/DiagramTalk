@@ -258,12 +258,15 @@ def cmd_tag(args):
 
 
 def cmd_record_start(args):
-    body = {}
+    input_payload = {}
+    body = {"type": "startRecording"}
     if args.diagram:
         body["diagramId"] = args.diagram
     if args.name:
-        body["name"] = args.name
-    print_json(request("POST", "/api/diagram/recordings", body))
+        input_payload["name"] = args.name
+    if input_payload:
+        body["input"] = input_payload
+    print_json(request("POST", "/api/diagram/commands", body))
 
 
 def cmd_record_list(_args):
@@ -275,14 +278,15 @@ def cmd_record_show(args):
 
 
 def cmd_record_end(args):
-    recording_id = args.id or "active"
-    print_json(
-        request(
-            "PATCH",
-            f"/api/diagram/recordings/{recording_id}",
-            {},
-        )
-    )
+    input_payload = {}
+    body = {"type": "endRecording"}
+    if args.diagram:
+        body["diagramId"] = args.diagram
+    if args.id:
+        input_payload["id"] = args.id
+    if input_payload:
+        body["input"] = input_payload
+    print_json(request("POST", "/api/diagram/commands", body))
 
 
 def cmd_save(args):
@@ -926,6 +930,7 @@ def build_parser():
 
     record_end = record_subparsers.add_parser("end", help="End a recording.")
     record_end.add_argument("id", nargs="?", help="Recording id (default: active).")
+    record_end.add_argument("--diagram", help="Diagram id guard (default: any active recording).")
     record_end.set_defaults(func=cmd_record_end)
 
     save = subparsers.add_parser(

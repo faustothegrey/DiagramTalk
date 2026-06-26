@@ -84,7 +84,9 @@ remaining diagram becomes active. Returns `{ "deleted": true, "activeId": "..." 
 
 ### `POST /api/diagram/commands`
 
-Queues a command for the browser bridge.
+Queues a command for the browser bridge, except for recording lifecycle commands
+(`startRecording` / `endRecording`), which are applied immediately by the
+server because they do not need the live tldraw editor.
 
 Create shape:
 
@@ -190,6 +192,40 @@ Optional highlight fields:
   (default 1600).
 - `padding`: extra screen pixels around the highlighted element, from 0 to 80
   (default 0, matching the element border).
+
+Start a recording as a first-class diagram command:
+
+```json
+{
+  "type": "startRecording",
+  "diagramId": "<diagram id>",
+  "input": {
+    "name": "Agent run 42"
+  }
+}
+```
+
+`diagramId` is optional and defaults to the active diagram. Unlike visual
+commands, `startRecording` returns already `applied`; the command includes
+`result.recordingId` and `result.activeId`. Starting a new recording closes any
+previous open recording.
+
+End a recording as a first-class diagram command:
+
+```json
+{
+  "type": "endRecording",
+  "diagramId": "<diagram id>",
+  "input": {
+    "id": "<recording id>"
+  }
+}
+```
+
+Both `diagramId` and `input.id` are optional. With `diagramId` and no explicit
+recording id, the command ends the active recording for that diagram. With
+neither field, it ends the globally active recording. The command returns
+already `applied` and includes `result.recordingId` and `result.activeId`.
 
 Set or move a dynamic state tag on a box/rectangle shape:
 
@@ -342,19 +378,23 @@ the command bridge today:
 - `highlight`
 - `setStateTag`
 
-Start a recording:
+Preferred start form:
 
 ```json
-POST /api/diagram/recordings
+POST /api/diagram/commands
 {
+  "type": "startRecording",
   "diagramId": "<diagram id>",
-  "name": "Agent run 42"
+  "input": {
+    "name": "Agent run 42"
+  }
 }
 ```
 
-`diagramId` defaults to the active diagram. The response includes
-`{ recording, activeId }`. Only one recording is active at a time; starting a
-new one closes any previous open recording and makes the new recording active.
+`diagramId` defaults to the active diagram. The command is applied immediately
+and includes `result.recordingId` and `result.activeId`. Only one recording is
+active at a time; starting a new one closes any previous open recording and
+makes the new recording active.
 
 When the browser bridge applies a `highlight` or `setStateTag` command and
 reports it as applied, the server appends an event to the active recording if
@@ -372,11 +412,19 @@ file; run-time visual events should be expressed as `highlight` and
 `setStateTag`, which are appended to the recording. End the recording before
 making structural edits that should persist as the new base diagram.
 
-End the current recording:
+Preferred end form:
 
-```txt
-PATCH /api/diagram/recordings/active
+```json
+POST /api/diagram/commands
+{
+  "type": "endRecording",
+  "diagramId": "<diagram id>"
+}
 ```
+
+The legacy `POST /api/diagram/recordings` and
+`PATCH /api/diagram/recordings/active` endpoints remain available for
+compatibility.
 
 Fetch recordings:
 

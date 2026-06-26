@@ -130,6 +130,18 @@ Only one recording is active at a time. Starting a new one closes any previous
 open recording. Recorded events are appended when the browser bridge reports an
 applied `highlight` or `setStateTag` command for the recording's diagram.
 
+External drivers should prefer the first-class diagram command forms:
+
+```json
+{ "type": "startRecording", "diagramId": "<id>", "input": { "name": "run" } }
+{ "type": "endRecording", "diagramId": "<id>" }
+```
+
+These are sent to `POST /api/diagram/commands`, are applied immediately by the
+server, do not require an open browser tab, and return
+`command.result.recordingId`. The older `/api/diagram/recordings` start/end
+endpoints remain available for compatibility.
+
 Each event stores:
 
 - `commandId`
@@ -269,6 +281,8 @@ Render and save:
 
 Recording:
 
+- `POST /api/diagram/commands` with `type: "startRecording"`
+- `POST /api/diagram/commands` with `type: "endRecording"`
 - `GET /api/diagram/recordings`
 - `POST /api/diagram/recordings`
 - `GET /api/diagram/recordings/{id}`

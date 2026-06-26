@@ -93,7 +93,8 @@ python3 scripts/diagramtalk.py tag shape:done "agent" --tag-id agent-1
 ```
 
 9. Start a recording before a driver/test run when you need a persisted timed
-   log of highlights and state-tag movements, then end it when the run finishes:
+   log of highlights and state-tag movements, then end it when the run finishes.
+   The CLI sends first-class `startRecording` / `endRecording` diagram commands:
 
 ```bash
 python3 scripts/diagramtalk.py record start --name "Agent run"
@@ -271,7 +272,9 @@ Only box/rectangle shapes can receive state tags; ellipse/text/note/arrow
 targets fail. Tags do not change snapshots or renders.
 
 Record a driver/test run. Recordings persist a timed event log of bridge-applied
-`highlight` and `tag` commands for the recording's diagram:
+`highlight` and `tag` commands for the recording's diagram. Start and end runs
+with the first-class `startRecording` / `endRecording` diagram commands (the CLI
+uses them):
 
 ```bash
 python3 scripts/diagramtalk.py record start --name "M10 run" --diagram <id>
@@ -288,6 +291,21 @@ Each recorded event stores the original command input, the command id,
 the browser bridge's applied-command report, so it captures visible event order
 rather than just request enqueue order. A playback/replay endpoint is not
 implemented yet.
+
+Raw API form for external agents:
+
+```json
+POST /api/diagram/commands
+{ "type": "startRecording", "diagramId": "<id>", "input": { "name": "run" } }
+```
+
+```json
+POST /api/diagram/commands
+{ "type": "endRecording", "diagramId": "<id>" }
+```
+
+These lifecycle commands are applied immediately by the server and return
+`command.result.recordingId`. They do not require an open browser tab.
 
 While a recording is active for a diagram, that diagram's snapshot persistence
 is frozen: autosave and explicit `save` do not update the base diagram. Persist

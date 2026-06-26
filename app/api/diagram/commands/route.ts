@@ -1,11 +1,21 @@
 import { addDiagramCommand, listDiagramCommands } from '@/lib/diagramApiStore'
-import { getDiagram } from '@/lib/diagramStore'
+import { getActiveDiagram, getDiagram } from '@/lib/diagramStore'
+import {
+  endRecording,
+  getActiveRecording,
+  getActiveRecordingForDiagram,
+  getRecording,
+  listRecordings,
+  startRecording,
+} from '@/lib/diagramRecordingStore'
 import type {
   CreateDiagramCommandRequest,
   CreateDiagramCommandResponse,
   DiagramCommand,
   DiagramCommandStatus,
+  EndRecordingInput,
   ListDiagramCommandsResponse,
+  StartRecordingInput,
 } from '@/lib/diagramApiTypes'
 
 export const runtime = 'nodejs'
@@ -45,6 +55,14 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Target diagram not found.' }, { status: 404 })
   }
 
+  if (payload.type === 'startRecording') {
+    return createStartRecordingCommand(payload)
+  }
+
+  if (payload.type === 'endRecording') {
+    return createEndRecordingCommand(payload)
+  }
+
   const baseCommand = {
     id: crypto.randomUUID(),
     status: 'pending' as const,
@@ -71,6 +89,87 @@ export async function POST(request: Request) {
   }
 
   return Response.json(response, { status: 201 })
+}
+
+async function createStartRecordingCommand(
+  payload: Extract<CreateDiagramCommandRequest, { type: 'startRecording' }>,
+) {
+  const activeDiagram = payload.diagramId === undefined ? await getActiveDiagram() : null
+  const diagramId = payload.diagramId ?? activeDiagram?.id ?? null
+
+  if (!diagramId) {
+    return Response.json({ error: 'No diagram to record.' }, { status: 404 })
+  }
+
+  const recording = await startRecording({ diagramId, name: payload.input?.name })
+  const createdAt = recording.startedAt
+  const command: DiagramCommand = {
+    id: crypto.randomUUID(),
+    status: 'applied',
+    createdAt,
+    appliedAt: createdAt,
+    diagramId,
+    type: 'startRecording',
+    ...(payload.input !== undefined ? { input: payload.input } : {}),
+    result: {
+      recordingId: recording.id,
+      activeId: recording.id,
+    },
+  }
+
+  const response: CreateDiagramCommandResponse = {
+    command: addDiagramCommand(command),
+  }
+
+  return Response.json(response, { status: 201 })
+}
+
+async function createEndRecordingCommand(
+  payload: Extract<CreateDiagramCommandRequest, { type: 'endRecording' }>,
+) {
+  const recordingToEnd = await resolveRecordingToEnd(payload.input, payload.diagramId)
+
+  if (!recordingToEnd) {
+    return Response.json({ error: 'Recording not found.' }, { status: 404 })
+  }
+
+  if (payload.diagramId !== undefined && recordingToEnd.diagramId !== payload.diagramId) {
+    return Response.json({ error: 'Recording does not belong to the target diagram.' }, { status: 409 })
+  }
+
+  const recording = await endRecording(recordingToEnd.id)
+
+  if (!recording) {
+    return Response.json({ error: 'Recording not found.' }, { status: 404 })
+  }
+
+  const { activeId } = await listRecordings()
+  const createdAt = new Date().toISOString()
+  const command: DiagramCommand = {
+    id: crypto.randomUUID(),
+    status: 'applied',
+    createdAt,
+    appliedAt: recording.endedAt ?? createdAt,
+    diagramId: recording.diagramId,
+    type: 'endRecording',
+    ...(payload.input !== undefined ? { input: payload.input } : {}),
+    result: {
+      recordingId: recording.id,
+      activeId,
+    },
+  }
+
+  const response: CreateDiagramCommandResponse = {
+    command: addDiagramCommand(command),
+  }
+
+  return Response.json(response, { status: 201 })
+}
+
+async function resolveRecordingToEnd(input?: EndRecordingInput, diagramId?: string) {
+  if (input?.id) return getRecording(input.id)
+  if (diagramId) return getActiveRecordingForDiagram(diagramId)
+  return getActiveRecording()
 }
 
 function isDiagramCommandStatus(value: string): value is DiagramCommandStatus {
@@ -110,6 +209,14 @@ function isCreateDiagramCommandRequest(
 
   if (maybeRequest.type === 'setStateTag') {
     return isSetStateTagInput((maybeRequest as { input?: unknown }).input)
+  }
+
+  if (maybeRequest.type === 'startRecording') {
+    return isOptionalStartRecordingInput((maybeRequest as { input?: unknown }).input)
+  }
+
+  if (maybeRequest.type === 'endRecording') {
+    return isOptionalEndRecordingInput((maybeRequest as { input?: unknown }).input)
   }
 
   return false
@@ -246,4 +353,20 @@ function isSetStateTagInput(value: unknown) {
     typeof input.label === 'string' &&
     input.label.trim().length > 0
   )
+}
+
+function isOptionalStartRecordingInput(value: unknown): value is StartRecordingInput | undefined {
+  if (value === undefined) return true
+  if (!value || typeof value !== 'object') return false
+
+  const input = value as Record<string, unknown>
+  return input.name === undefined || input.name === null || typeof input.name === 'string'
+}
+
+function isOptionalEndRecordingInput(value: unknown): value is EndRecordingInput | undefined {
+  if (value === undefined) return true
+  if (!value || typeof value !== 'object') return false
+
+  const input = value as Record<string, unknown>
+  return input.id === undefined || typeof input.id === 'string'
 }
